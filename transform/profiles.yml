@@ -6,7 +6,7 @@ starlink_drag:
   outputs:
     dev:
       type: duckdb
-      path: "{{ env_var('DUCKDB_PATH', 'data/warehouse.duckdb') }}"
+      path: "{{ env_var('DUCKDB_PATH', 'data/atlas.duckdb') }}"
       threads: 4
       extensions:
         - httpfs

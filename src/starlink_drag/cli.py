@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -24,6 +25,13 @@ app = typer.Typer(
 )
 ingest_app = typer.Typer(name="ingest", help="Land raw sources into bronze.", no_args_is_help=True)
 app.add_typer(ingest_app)
+
+warehouse_app = typer.Typer(
+    name="warehouse",
+    help="Expose bronze to DuckDB so dbt can read it.",
+    no_args_is_help=True,
+)
+app.add_typer(warehouse_app)
 
 StartOpt = Annotated[
     dt.datetime,
@@ -164,6 +172,67 @@ def backfill_command(start: StartOpt, end: EndOpt, window_days: WindowOpt = 90) 
     typer.echo("  " + report.describe())
     if report.chunks_failed:
         raise typer.Exit(code=1)
+
+
+# -- warehouse and seeds ----------------------------------------------------
+
+
+@warehouse_app.command("sync")
+def warehouse_sync_command() -> None:
+    """Rebuild the bronze views dbt reads from.
+
+    Bronze is a set of Iceberg tables whose file lists change with every
+    ingest, and DuckDB cannot read them through `iceberg_scan` on this
+    platform. This resolves each table's current snapshot and points a view at
+    exactly those files. Run it before `dbt build`; `make build` does.
+    """
+    from starlink_drag import warehouse
+
+    settings = get_settings()
+    results = warehouse.sync(settings)
+    typer.echo(f"warehouse: {settings.duckdb_path}")
+    typer.echo(warehouse.describe(results))
+
+
+@app.command("seed-generations")
+def seed_generations_command(
+    refresh: Annotated[
+        bool, typer.Option(help="Re-download GCAT instead of using the cached copy.")
+    ] = False,
+) -> None:
+    """Rebuild the Starlink generation seed from GCAT.
+
+    GCAT is CC-BY, so unlike Space-Track the derived seed is committed and
+    anyone can regenerate it without credentials.
+    """
+    from starlink_drag.ingest.generation_map import build_from_cache
+
+    settings = get_settings()
+    report = build_from_cache(
+        settings.data_dir / "raw" / "gcat_satcat.tsv",
+        Path("transform") / "seeds" / "starlink_generation_map.csv",
+        refresh=refresh,
+    )
+    typer.echo(report.describe())
+
+
+@app.command("data-dictionary")
+def data_dictionary_command() -> None:
+    """Regenerate docs/data_dictionary.md from dbt's manifest.
+
+    Generated rather than hand-written: a hand-maintained dictionary is wrong
+    within a week and nobody notices. Run `dbt docs generate` first.
+    """
+    from starlink_drag.data_dictionary import write
+
+    transform = Path("transform") / "target"
+    manifest = transform / "manifest.json"
+    if not manifest.exists():
+        typer.echo(f"{manifest} not found. Run `make docs` (dbt docs generate) first.", err=True)
+        raise typer.Exit(code=1)
+
+    written = write(manifest, transform / "catalog.json", Path("docs") / "data_dictionary.md")
+    typer.echo(f"wrote {written}")
 
 
 def _require_credentials(settings: Settings) -> None:

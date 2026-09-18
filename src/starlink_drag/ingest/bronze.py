@@ -1,23 +1,23 @@
 """Bronze landing zone: partitioned Iceberg tables written through dlt.
 
-Three properties this module exists to guarantee.
+Bronze is **append-only**, as originally specified. A re-run adds a second copy
+of a partition's rows; the duplicate is collapsed in the intermediate layer on
+each table's natural key. Partition-scoped *replacement* was tried first and
+abandoned on measurement -- see ADR-0005 for the numbers.
 
-**Partition-scoped idempotency.** Each table is partitioned by a date column and
-loaded with a merge/upsert keyed on that partition plus the natural key. Loading
-``epoch_date=2024-05-10`` again rewrites that partition and leaves every other
-one untouched.
+Two properties this module still guarantees.
 
-**Byte-identical re-runs.** Resources yield Arrow tables, for which dlt's
+**Deterministic file contents.** Resources yield Arrow tables, for which dlt's
 parquet normaliser adds neither ``_dlt_id`` nor ``_dlt_load_id`` -- both would
-be random or clock-derived and would defeat this. Rows are sorted on a stable
-key before writing, and no wall-clock value is stored in a data column. Two runs
-over the same input therefore produce identical Parquet bytes.
+be random or clock-derived. Rows are sorted on a stable key before writing and
+column order is fixed by the schema module, so the same input always produces
+byte-identical Parquet. What a re-run changes is how many files a partition has,
+not what any one of them contains.
 
-**Provenance without poisoning the bytes.** ``ingest_timestamp`` is what makes
-"immutable and append-only" and "byte-identical" contradictory, so it lives in a
-separate ``bronze_ingest_audit`` table rather than in the data rows. Iceberg's
-snapshot history supplies the rest: nothing is ever mutated in place. See
-ADR-0004.
+**Provenance outside the data.** ``ingest_timestamp`` lives in a separate
+``bronze_ingest_audit`` table rather than in bronze rows, so the data files stay
+free of wall-clock values. Iceberg snapshots supply the rest: nothing is ever
+mutated in place. See ADR-0004.
 """
 
 from __future__ import annotations
@@ -51,14 +51,19 @@ _LEADING_DRIVE: Final = re.compile(r"^/[A-Za-z]:")
 
 @dataclass(frozen=True, slots=True)
 class BronzeSpec:
-    """How one bronze table is keyed and partitioned."""
+    """How one bronze table is partitioned, and what identifies a row.
+
+    ``natural_key`` is not used by the write -- bronze appends. It records the
+    key the intermediate layer deduplicates on, so the definition lives beside
+    the table it describes rather than only inside a dbt model.
+    """
 
     table: str
     partition_column: str
-    primary_key: tuple[str, ...]
+    natural_key: tuple[str, ...]
 
 
-GP_SPEC: Final = BronzeSpec(GP_TABLE, "epoch_date", ("gp_id",))
+GP_SPEC: Final = BronzeSpec(GP_TABLE, "epoch_date", ("norad_id", "epoch"))
 OMNI_SPEC: Final = BronzeSpec(OMNI_TABLE, "epoch_date", ("observed_at",))
 SATCAT_SPEC: Final = BronzeSpec(SATCAT_TABLE, "ingest_date", ("ingest_date", "norad_id"))
 
@@ -120,7 +125,19 @@ def write(
     *,
     pipeline_name: str | None = None,
 ) -> LoadOutcome:
-    """Load a typed frame into its bronze table, replacing whole partitions."""
+    """Append a typed frame to its bronze table.
+
+    Bronze is append-only. Re-running a partition adds a second copy of its rows
+    rather than replacing them, and the duplicate is collapsed downstream by
+    ``int_gp__deduplicated`` on the table's natural key.
+
+    This was originally a merge/upsert, so that a partition's files were
+    replaced outright. It is not: at real volume the upsert costs roughly two
+    hundred times an append -- 45,000 rows across 90 partitions took over twenty
+    minutes against six seconds -- and a one-year backfill did not finish. The
+    cost scales with rows *and* partitions per commit, so no batching size
+    rescues it. See ADR-0005.
+    """
     partitions = _partition_values(frame, spec.partition_column)
     if frame.is_empty():
         return LoadOutcome(spec.table, (), 0, 0)
@@ -128,8 +145,7 @@ def write(
     resource = dlt.resource(
         frame.to_arrow(),
         name=spec.table,
-        write_disposition={"disposition": "merge", "strategy": "upsert"},
-        primary_key=list(spec.primary_key),
+        write_disposition="append",
         columns={spec.partition_column: {"partition": True}},
     )
     pipeline = make_pipeline(pipeline_name or spec.table, settings)

@@ -2,7 +2,8 @@
 
 Plain-language version: [phase-1-plain.md](phase-1-plain.md).
 
-**Status:** complete, 2026-09-18.
+**Status:** complete, 2026-09-18. **Corrected 2026-09-19** — see
+[what Phase 2 disproved](#what-phase-2-disproved).
 
 ## What this phase is for
 
@@ -139,7 +140,7 @@ about the result would look wrong — it would just take twelve hours.
 | Rate limiter over 700 simulated requests | never exceeds 29/60s or 299/3600s |
 | SATCAT validation | 12,865 / 12,865 clean |
 | OMNI, one year | 8,784 rows = 366 days × 24 hours |
-| Byte-identical partition re-run | asserted in integration tests and confirmed on real partitions |
+| Byte-identical partition re-run | **later disproved at scale — see below** |
 | Neighbouring partitions after a re-run | digests unchanged |
 | Quarantine | impossible values routed out with reason and payload intact |
 
@@ -165,6 +166,34 @@ the drive letter and resolves to a non-existent file. `local_path` puts it back.
 **dlt's state filenames are ~100 characters**, which breaks Windows' 260-char
 path limit with a bare `FileNotFoundError` under a deep parent. The pipeline
 working directory is kept shallow, inside `data/.dlt`.
+
+## What Phase 2 disproved
+
+Two claims in this document were wrong, and correcting them is more useful than
+leaving them.
+
+**The write strategy did not survive real volume.** Bronze used a merge/upsert
+so that reloading a partition replaced it. Measured at scale, an upsert costs
+roughly two hundred times an append — 45,000 rows across 90 partitions took over
+twenty minutes against six seconds — and a one-year backfill ran two hours,
+finished no window, and stalled. Bronze now **appends**, and duplicates are
+collapsed by `int_gp__deduplicated`, which is what the brief specified in the
+first place. [ADR-0005](../adr/0005-bronze-appends-rather-than-replaces.md) has
+the numbers and what the change costs.
+
+So the acceptance claim above should read: identical input produces
+byte-identical Parquet *contents*, but a re-run adds a file rather than
+replacing one, so a partition's file *set* is not stable. The reproducible
+artefact is the deduplicated model, not the bronze directory.
+
+**The per-partition write cost was misattributed.** This document said writing
+costs about 1.5 seconds per partition touched. That was the upsert. An append
+writes 90 partitions in six seconds, and the fix described below — one write per
+window rather than one per batch — was real but far smaller than the strategy
+change that followed it.
+
+The first full-year backfill under the corrected code landed 1,323,708 rows
+across 90 partitions in 90 files, in about ten minutes.
 
 ## Deviations from the brief, and why
 
@@ -197,9 +226,9 @@ genuine and unmodified, because OMNI is public domain.
 own window and could exceed the limit together. Phase 3 must not introduce
 parallel Space-Track assets without moving that state somewhere shared.
 
-**Superseded files accumulate.** Nothing expires snapshots yet, so repeated
-backfills grow the lake without bound. Phase 4 needs a retention and compaction
-policy.
+**Superseded rows accumulate.** Under append-only, a re-run leaves the old rows
+in place permanently rather than merely unreferenced. Phase 4's retention work
+is now load-bearing: it needs compaction as well as snapshot expiry.
 
 **DuckDB's `iceberg_scan` does not work against this lake on Windows**, which
 Phase 2 has to design around. Tested directly:

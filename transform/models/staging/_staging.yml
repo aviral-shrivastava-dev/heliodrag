@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: stg_spacetrack__gp_history
+    description: >
+      Element sets, renamed and cast, 1:1 with bronze. Duplicates from re-run
+      partitions are still present here by design.
+    columns:
+      - name: gp_id
+        description: Space-Track's identifier for this element set.
+        data_tests: [not_null]
+      - name: norad_id
+        data_tests: [not_null]
+      - name: epoch_at
+        data_tests: [not_null]
+      - name: mean_motion_rev_per_day
+        description: Revolutions per day; rises as drag shrinks the orbit.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.5
+              max_value: 20
+      - name: epoch_date
+        data_tests: [not_null]
+
+  - name: stg_spacetrack__satcat
+    description: Catalogue snapshots, renamed and cast, 1:1 with bronze.
+    columns:
+      - name: norad_id
+        data_tests: [not_null]
+      - name: ingest_date
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [norad_id, ingest_date]
+
+  - name: stg_nasa__omni
+    description: >
+      Hourly space weather. Kp is divided by ten here to restore its real 0-9
+      scale; OMNI transmits it as an integer multiple of ten.
+    columns:
+      - name: observed_at
+        data_tests: [not_null, unique]
+      - name: kp_index
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 9
+      - name: dst_nt
+        description: Reached -406 nT in May 2024, the deepest of Solar Cycle 25.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -1000
+              max_value: 200
+      - name: f10_7_sfu
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 50
+              max_value: 600

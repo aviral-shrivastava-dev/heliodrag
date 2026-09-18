@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     data_dir: Path = Path("data")
-    duckdb_path: Path = Path("data/warehouse.duckdb")
+    duckdb_path: Path = Path("data/atlas.duckdb")
 
     pipeline_start_date: dt.date = dt.date(2020, 1, 1)
     log_level: str = "INFO"

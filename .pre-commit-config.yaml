@@ -8,7 +8,11 @@ repos:
     rev: v5.0.0
     hooks:
       - id: check-added-large-files
-        args: ["--maxkb=512"]
+        # 2 MB, to admit transform/seeds/starlink_generation_map.csv (~1.2 MB):
+        # a reference table of 12,440 satellites derived from GCAT, which is
+        # CC-BY and therefore redistributable. The guard against committing
+        # actual pipeline data is the no-data-directory hook below, not this.
+        args: ["--maxkb=2048"]
       - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml

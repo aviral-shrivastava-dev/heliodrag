@@ -1,7 +1,14 @@
 # ADR-0004: Bronze replaces partitions; provenance lives outside the data files
 
-- **Status:** accepted
+- **Status:** partly superseded by [ADR-0005](0005-bronze-appends-rather-than-replaces.md)
 - **Date:** 2026-09-18
+
+> **The write strategy in this record no longer holds.** The merge/upsert
+> described below is roughly two hundred times slower than an append at real
+> volume and could not complete a one-year backfill; bronze now appends and
+> deduplicates downstream. ADR-0005 has the measurements. Everything else here
+> — provenance outside the data files, and reading through the snapshot rather
+> than the directory — still stands.
 
 ## Context
 

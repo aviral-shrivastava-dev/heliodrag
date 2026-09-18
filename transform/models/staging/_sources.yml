@@ -1,0 +1,73 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: >
+      Raw landing zone. These are DuckDB views over the Iceberg tables' current
+      snapshots, rebuilt by `starlink-drag warehouse sync` before every dbt run.
+      They are not tables in this database and nothing here may be written to.
+
+      Bronze is append-only, so a re-run of a partition leaves a second copy of
+      its rows. Deduplication is the intermediate layer's job -- see
+      int_gp__deduplicated.
+    schema: bronze
+
+    tables:
+      - name: gp_history
+        description: >
+          Space-Track general-perturbations element sets, one row per published
+          element set per satellite. Partitioned by the epoch's date.
+          Covered by a US-government data-use agreement; not redistributable.
+        columns:
+          - name: gp_id
+            description: Space-Track's own identifier for this element set. A corrected set gets a new one.
+          - name: norad_id
+            description: NORAD catalogue number of the object.
+          - name: epoch
+            description: Time the elements describe, UTC, no zone marker.
+          - name: mean_motion
+            description: Revolutions per day. Rises as drag shrinks the orbit.
+          - name: epoch_date
+            description: Partition key; the calendar date of `epoch`.
+
+      - name: satcat
+        description: >
+          Space-Track catalogue snapshot, partitioned by the date it was
+          fetched. Each ingest is a complete picture of current state, so
+          comparing two ingests is how a decay is detected.
+        columns:
+          - name: norad_id
+            description: NORAD catalogue number.
+          - name: decay_date
+            description: Date the object re-entered, null while on orbit.
+          - name: ingest_date
+            description: Partition key; the date this snapshot was taken.
+
+      - name: omni
+        description: >
+          NASA OMNI hourly space weather, as delivered. Kp arrives multiplied by
+          ten and fill markers have already become null at the ingestion
+          boundary. Public domain.
+        columns:
+          - name: observed_at
+            description: Hour the measurement describes, UTC.
+          - name: f10_7_sfu
+            description: Solar radio flux at 10.7 cm, in solar flux units.
+          - name: kp_x10
+            description: Planetary K index times ten, so 90 means Kp 9.0.
+          - name: dst_nt
+            description: Disturbance storm-time index, nT. Strongly negative during a storm.
+          - name: ap_nt
+            description: Planetary A index, nT.
+
+      - name: quarantine
+        description: >
+          Rows that failed their Pandera contract at ingestion, with the reason
+          and the whole original payload. A non-empty quarantine is a signal,
+          not a dustbin.
+
+      - name: ingest_audit
+        description: >
+          One row per load: what was fetched, when, how many rows, how many
+          quarantined. This is where ingest_timestamp lives, deliberately kept
+          out of the data files so they stay byte-identical for identical input.

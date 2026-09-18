@@ -8,7 +8,7 @@ DBT := $(UV) run dbt
 DBT_FLAGS := --project-dir $(DBT_DIR) --profiles-dir $(DBT_DIR)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format typecheck test test-cov run docs clean
+.PHONY: help setup lint format typecheck test test-cov run build docs clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -40,9 +40,14 @@ test-cov: ## Run tests with a coverage report for science/
 run: ## Launch the Dagster UI at http://localhost:3000
 	$(UV) run dagster dev -m starlink_drag.definitions
 
+build: ## Sync bronze views, then run dbt build (models + tests)
+	$(UV) run starlink-drag warehouse sync
+	$(DBT) build $(DBT_FLAGS)
+
 docs: ## Build dbt docs into transform/target/
 	$(DBT) deps $(DBT_FLAGS)
 	$(DBT) docs generate $(DBT_FLAGS)
+	$(UV) run starlink-drag data-dictionary
 	@echo "open $(DBT_DIR)/target/index.html"
 
 clean: ## Remove build, cache and dbt artefacts (never touches data/)

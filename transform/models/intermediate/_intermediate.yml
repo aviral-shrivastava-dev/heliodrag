@@ -1,0 +1,77 @@
+version: 2
+
+models:
+  - name: int_gp__deduplicated
+    description: >
+      One element set per satellite per epoch. Collapses both append duplicates
+      and Space-Track corrections by keeping the highest gp_id.
+    columns:
+      - name: gp_id
+        data_tests: [not_null]
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [norad_id, epoch_at]
+
+  - name: int_satellite__generation_labeled
+    description: >
+      The current catalogue snapshot with a hardware generation attached from
+      the GCAT-derived seed. Left joined, so an unclassified satellite is
+      labelled 'unknown' rather than disappearing.
+    columns:
+      - name: norad_id
+        data_tests: [not_null, unique]
+      - name: generation
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [v0.9, v1.0, v1.5, v2-mini, v2-mini-opt, v2-mini-dtc, unknown]
+      - name: generation_confidence
+        data_tests:
+          - accepted_values:
+              values: [high, medium, none]
+
+  - name: int_decay__daily_rates
+    description: >
+      One row per satellite per day, from the last element set of that day, with
+      the rate of change against the previous available day.
+    columns:
+      - name: norad_id
+        data_tests: [not_null]
+      - name: epoch_date
+        data_tests: [not_null]
+      - name: mean_altitude_km
+        description: >
+          Warns rather than errors. This layer is closest to raw, and
+          Space-Track occasionally publishes a preliminary post-launch fit
+          placing an object thousands of kilometres from any orbit it flies.
+          Those are excluded downstream by is_analysis_ready; surfacing them
+          here without blocking the build is the point.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 100
+              max_value: 2000
+              config:
+                severity: warn
+      - name: interval_days
+        description: Actual gap to the previous element set, divided out of the rate.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 400
+              row_condition: "interval_days is not null"
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [norad_id, epoch_date]
+
+  - name: int_space_weather__daily
+    description: >
+      Hourly OMNI collapsed to one row per day, each driver aggregated the way
+      it is used: Dst by minimum, Kp by mean and max, F10.7 by mean.
+    columns:
+      - name: epoch_date
+        data_tests: [not_null, unique]
+      - name: hours_observed
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 24

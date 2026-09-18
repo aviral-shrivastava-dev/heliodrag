@@ -3,9 +3,10 @@
 These run a real dlt pipeline against a real Iceberg table in a temporary
 directory. No network is involved -- the frames are built in the test.
 
-The byte-identity check here is the automated form of Phase 1's acceptance
-criterion: re-running a partition must produce identical Parquet bytes and must
-not disturb any other partition.
+Bronze is append-only. The guarantee asserted here is that identical input
+produces byte-identical Parquet *contents*, and that a re-run disturbs no other
+partition -- not that a partition's file set is unchanged, which append cannot
+give. Duplicates are collapsed downstream. See ADR-0005.
 """
 
 from __future__ import annotations
@@ -60,17 +61,21 @@ def _digest(settings: Settings, day: str) -> list[str]:
 # -- the acceptance criterion ----------------------------------------------
 
 
-def test_rerunning_a_partition_produces_byte_identical_output(
+def test_identical_input_produces_byte_identical_file_contents(
     settings: Settings,
 ) -> None:
+    """The same rows must always serialise to the same bytes, so a reviewer
+    re-running the pipeline has nothing to investigate."""
     write(_frame("2024-05-10"), OMNI_SPEC, settings)
     first = _digest(settings, "2024-05-10")
 
     write(_frame("2024-05-10"), OMNI_SPEC, settings)
     second = _digest(settings, "2024-05-10")
 
-    assert first, "expected at least one data file"
-    assert first == second
+    assert len(first) == 1, "expected one data file after one load"
+    assert len(second) == 2, "append adds a file rather than replacing"
+    # Both files hold the same rows, so both hash the same.
+    assert set(second) == set(first)
 
 
 def test_rerunning_a_partition_leaves_other_partitions_untouched(
@@ -85,23 +90,37 @@ def test_rerunning_a_partition_leaves_other_partitions_untouched(
     assert _digest(settings, "2024-05-11") == untouched
 
 
-def test_reloading_a_partition_replaces_rather_than_duplicates(
+def test_reloading_duplicates_in_bronze_but_deduplicates_on_the_natural_key(
     settings: Settings,
 ) -> None:
+    """Append means a re-run duplicates. The intermediate layer is what makes
+    the result idempotent, which is how the brief specified it."""
     write(_frame("2024-05-10", hours=3), OMNI_SPEC, settings)
     write(_frame("2024-05-10", hours=3), OMNI_SPEC, settings)
 
     rows = read_table(settings, OMNI_SPEC.table, row_filter="epoch_date = '2024-05-10'")
-    assert rows.height == 3
+    assert rows.height == 6
+
+    deduplicated = rows.unique(subset=list(OMNI_SPEC.natural_key))
+    assert deduplicated.height == 3
 
 
-def test_corrected_data_supersedes_the_earlier_load(settings: Settings) -> None:
-    """A partition re-run with different values must reflect the new values."""
+def test_both_generations_survive_in_bronze_when_a_value_changes(
+    settings: Settings,
+) -> None:
+    """A known limit of append-only bronze, asserted so it is not a surprise.
+
+    If a source corrects a value, bronze holds both and nothing in the row
+    distinguishes them. For gp_history that is resolvable -- a corrected element
+    set carries a new gp_id, so the intermediate model keeps the highest. OMNI
+    carries no such marker, which is why OMNI corrections need a reload of the
+    table rather than of a partition.
+    """
     write(_frame("2024-05-10", dst=-50), OMNI_SPEC, settings)
     write(_frame("2024-05-10", dst=-406), OMNI_SPEC, settings)
 
     rows = read_table(settings, OMNI_SPEC.table, row_filter="epoch_date = '2024-05-10'")
-    assert set(rows["dst_nt"].to_list()) == {-406}
+    assert set(rows["dst_nt"].to_list()) == {-50, -406}
 
 
 # -- partitioning ----------------------------------------------------------

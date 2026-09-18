@@ -1,0 +1,217 @@
+version: 2
+
+models:
+  # -- dimensions ----------------------------------------------------------
+
+  - name: dim_satellite
+    description: >
+      One row per catalogued Starlink satellite. Grain is the satellite, not the
+      satellite-day: everything here is a property of the hardware or of its
+      life as a whole.
+    columns:
+      - name: norad_id
+        description: NORAD catalogue number. The join key for every fact here.
+        data_tests: [not_null, unique]
+      - name: object_name
+        description: Catalogue name, e.g. STARLINK-1007.
+        data_tests: [not_null]
+      - name: generation
+        description: >
+          Hardware generation from the GCAT-derived seed. 'unknown' means
+          Space-Track lists the object but GCAT has not classified it.
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [v0.9, v1.0, v1.5, v2-mini, v2-mini-opt, v2-mini-dtc, unknown]
+      - name: generation_confidence
+        description: >
+          'high' where GCAT states the bus outright; 'medium' where it was
+          inferred from launch-mass banding; 'none' where unknown.
+        data_tests:
+          - accepted_values:
+              values: [high, medium, none]
+      - name: launch_mass_kg
+        description: Launch mass from GCAT. Trimodal for Gen1, which is what the banding uses.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 100
+              max_value: 2000
+              row_condition: "launch_mass_kg is not null"
+      - name: span_m
+        description: >
+          Deployed solar-array wingspan, NOT a drag cross-section. 9 m for Gen1,
+          29 m for Gen2.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 100
+              row_condition: "span_m is not null"
+      - name: area_to_mass_proxy
+        description: >
+          span^2 / dry_mass. A relative comparison between generations under a
+          fixed geometric assumption, never an absolute ballistic coefficient.
+      - name: launch_date
+        data_tests: [not_null]
+      - name: decay_date
+        description: Re-entry date, null while on orbit.
+      - name: has_decayed
+        data_tests: [not_null]
+      - name: days_on_orbit
+        description: Launch to decay, or to today if still on orbit.
+    data_tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 10000
+          max_value: 100000
+
+  - name: dim_generation
+    description: >
+      One row per hardware generation: the unit the research question compares.
+      Masses and spans are medians, because each generation is a few discrete
+      build variants and a mean would describe one that was never built.
+    columns:
+      - name: generation
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              values: [v0.9, v1.0, v1.5, v2-mini, v2-mini-opt, v2-mini-dtc, unknown]
+      - name: satellites
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+      - name: decayed_pct
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+      - name: median_span_m
+        description: 9 m for every Gen1 generation, 29 m for every Gen2 one.
+      - name: first_launch_date
+        description: >
+          Orders the generations in time, and shows how strongly generation and
+          epoch are collinear -- the confounder Phase 7 has to break.
+
+  # -- facts ---------------------------------------------------------------
+
+  - name: fct_daily_decay
+    description: >
+      One row per satellite per day: the decay it showed and the space weather
+      it was flying through. The table the research question is answered from.
+
+      The confounder controls are columns, not filters, so the analysis can
+      condition on them explicitly and a reviewer can see what each one costs.
+    columns:
+      - name: norad_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_satellite')
+              field: norad_id
+      - name: epoch_date
+        data_tests: [not_null]
+      - name: generation
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_generation')
+              field: generation
+      - name: mean_altitude_km
+        description: Circular-orbit altitude from mean motion, above the WGS-84 equatorial radius.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 100
+              max_value: 2000
+              row_condition: "is_analysis_ready"
+      - name: altitude_rate_km_per_day
+        description: >
+          Rate of altitude change. NEGATIVE means decaying. Null on a
+          satellite's first observed day, when there is nothing to difference
+          against.
+
+          The range is wide on purpose. A satellite in terminal re-entry below
+          200 km really does lose 50-140 km in a day, and a bound that rejected
+          that would be rejecting the most drag-dominated data in the set. The
+          physics is instead checked by assert_extreme_decay_is_low_altitude,
+          which requires such rates to occur only where they are possible.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -500
+              max_value: 500
+              row_condition: "altitude_rate_km_per_day is not null and is_analysis_ready"
+      - name: altitude_shell_km
+        description: 25 km altitude bucket. Density falls with height, so this must be held.
+        data_tests: [not_null]
+      - name: is_likely_manoeuvring
+        description: Orbit rising faster than drag could explain, i.e. under thrust.
+        data_tests: [not_null]
+      - name: has_clean_interval
+        description: Gap to the previous element set is between 0.5 and 2 days.
+        data_tests: [not_null]
+      - name: is_rate_physically_plausible
+        description: >
+          The rate is one drag could produce at that altitude. Catches large
+          orbit-raising steps, which is_likely_manoeuvring misses because they
+          show as an apparent fall on alternate days.
+        data_tests: [not_null]
+      - name: is_analysis_ready
+        description: >
+          Real rate, sane interval, not manoeuvring, known generation. The
+          headline comparison uses only these rows.
+        data_tests: [not_null]
+      - name: dst_min_nt
+        description: Worst Dst that day. Null where OMNI has not been landed for the date.
+      - name: f10_7_sfu
+        description: Daily solar radio flux.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [norad_id, epoch_date]
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 1000
+
+  - name: fct_storm_epoch
+    description: >
+      Superposed-epoch input: for each storm, each generation and each day
+      offset from the storm's peak, the mean decay observed.
+
+      Superposing many storms is what separates the fast drag response from the
+      slow solar-cycle trend. A storm is Dst at or below -50 nT; consecutive
+      stormy days collapse into one event keyed on its worst day.
+    columns:
+      - name: storm_id
+        data_tests: [not_null]
+      - name: peak_date
+        data_tests: [not_null]
+      - name: peak_dst_nt
+        description: Minimum Dst of the event. More negative is more severe.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -1000
+              max_value: -50
+      - name: generation
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_generation')
+              field: generation
+      - name: days_from_peak
+        description: Offset from the storm peak; negative is before.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -5
+              max_value: 10
+      - name: observations
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+      - name: satellites
+        data_tests: [not_null]
+      - name: mean_altitude_rate_km_per_day
+        description: Mean over satellites of that generation in that shell on that day.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [storm_id, generation, days_from_peak, altitude_shell_km]

@@ -244,6 +244,31 @@ converting, checking) and never reach a scientific result. One record is
 deliberately impossible, so the quarantine path is tested on something that must
 fail.
 
+## What later turned out to be wrong
+
+Two things in this document did not survive contact with the full dataset, and
+it is more useful to say so than to quietly edit them away.
+
+**The "exactly the same, twice" promise was too strong.** The method used to
+guarantee it — replacing a day's file outright — turned out to be about **two
+hundred times slower** than simply adding a new file. On real volumes it never
+finished: a whole year ran for two hours and completed nothing.
+
+So the filing rule changed to the simpler one the plan originally called for:
+**always add, never replace**, and remove the duplicates later when the data is
+cleaned. Fetching the same day twice now leaves two copies, and the cleaning
+step collapses them into one.
+
+What survives is still worth having: the *contents* of a file are identical for
+identical data. What is lost is that a day's folder no longer holds exactly one
+file. The thing you can reproduce exactly is the cleaned table, not the raw
+folder.
+
+**The timing explanation was wrong too.** Filing did not cost a second and a
+half per folder — *replacing* did. Simply adding files does 90 folders in six
+seconds. With that fixed, the first quarter of a year landed 1,323,708 records
+in about ten minutes.
+
 ## What was checked
 
 | Check | Result |
