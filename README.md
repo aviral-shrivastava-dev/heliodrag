@@ -46,14 +46,14 @@ pip install -r requirements.txt
 Run the whole transformation layer offline, with no accounts and no network:
 
 ```bash
-PYTHONPATH=src python -m starlink_drag.fixtures_cli
+PYTHONPATH=src python -m starlink_drag.cli.fixtures
 cd dbt && DBT_PROFILES_DIR=. dbt deps && DBT_PROFILES_DIR=. dbt build --vars '{gp_history_path: ../data/fixtures/bronze/gp_history, omni_path: ../data/fixtures/bronze/omni, interim_path: ../data/fixtures/interim}'
 ```
 
 Real data:
 
 ```bash
-PYTHONPATH=src python -m starlink_drag.build          # GCAT -> generation map
+PYTHONPATH=src python -m starlink_drag.cli.build          # GCAT -> generation map
 cp .env.example .env                                  # then add Space-Track credentials
 DAGSTER_HOME=$PWD/.dagster PYTHONPATH=src dagster dev -m starlink_drag.orchestration.definitions
 ```

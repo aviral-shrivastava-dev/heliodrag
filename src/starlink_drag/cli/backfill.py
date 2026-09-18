@@ -24,8 +24,8 @@ import sys
 
 import pandas as pd
 
-from . import config
-from .ingest import spacetrack
+from .. import config
+from ..ingest import spacetrack
 
 log = logging.getLogger(__name__)
 

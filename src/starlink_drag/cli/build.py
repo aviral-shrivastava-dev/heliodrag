@@ -15,9 +15,9 @@ import sys
 
 import pandas as pd
 
-from . import generation_map as gm
+from .. import generation_map as gm
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[3]
 RAW_CACHE = PROJECT_ROOT / "data" / "raw" / "gcat_satcat.tsv"
 OUTPUT = PROJECT_ROOT / "data" / "interim" / "starlink_generation_map.parquet"
 
