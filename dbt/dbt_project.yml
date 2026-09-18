@@ -29,6 +29,12 @@ models:
       # it would double the storage of the largest table in the project.
       +materialized: view
       +schema: staging
+    intermediate:
+      # Intermediate models are materialised because marts join them repeatedly
+      # and the window functions are expensive to re-evaluate. Individual models
+      # override this (int_satellite_daily_state is incremental).
+      +materialized: table
+      +schema: intermediate
     marts:
       +materialized: table
       +schema: marts

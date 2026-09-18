@@ -4,7 +4,7 @@ A data platform that measures how atmospheric drag on Starlink satellites respon
 to space weather, broken out by hardware generation.
 
 The research question comes from a gap in the literature. The engineering problem
-is joining a rate-limited 45M-row orbital history to hourly space-weather indices
+is joining a rate-limited multi-million-row orbital history to hourly space-weather indices
 and a hardware dimension that no public catalogue actually publishes.
 
 ```
@@ -31,7 +31,7 @@ and a hardware dimension that no public catalogue actually publishes.
 | Orchestration | Dagster | Assets map 1:1 onto tables; daily partitions give per-day retry and resume on a rate-limited backfill. Airflow doesn't run natively on Windows. |
 | Transformation | dbt-core + DuckDB | Transformations as tested, documented SQL. DuckDB reads partitioned parquet in place — no load step. |
 | Storage | Partitioned Parquet (bronze) → DuckDB (marts) | Hive partitioning by day; `_SUCCESS` markers make completeness explicit. |
-| Quality | dbt tests + a validation suite in Python | 27 dbt tests; the generation map is additionally checked against externally known facts. |
+| Quality | dbt tests + a validation suite in Python | 46 dbt tests plus 27 unit tests; the generation map is additionally checked against externally known facts. |
 | Streaming | Redpanda (Kafka API) | Same API as Kafka, one binary, ~1 GB. |
 | CI | GitHub Actions | Full `dbt build` on every PR against a synthetic fixture — no credentials needed. |
 | Local stack | Docker Compose | Dagster UI, Redpanda, Redpanda Console. |
@@ -106,8 +106,8 @@ it on every PR.
 |---|---|
 | GCAT → `dim_satellite` | Done. 12,444 satellites, 100% labelled, validated. |
 | NASA OMNI → `stg_omni` | Done. 64,165 hourly rows, 2019-05-24 → present. |
-| Space-Track → `fct_satellite_day` | Loader built and unit-tested; **backfill not yet run** (needs credentials). |
-| dbt models | 4 models, 27 tests, all passing against fixtures. |
+| Space-Track → bronze | Backfill running. 249/662 day-partitions, 1.74M satellite-days. |
+| dbt models | 9 models across 3 layers, 46 tests, all passing. |
 | Dagster | 8 assets, 2 jobs, daily schedule. |
 | Streaming | Compose file ready; consumer not yet written. |
 | Dashboard | Not started. |
@@ -177,6 +177,43 @@ all 7,764 V2 satellites at once. `dim_satellite.in_v2_natural_experiment` flags 
 - Fitzpatrick et al. (2026), [Space Weather](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2025SW004611)
   — uses SpaceX–NOAA onboard GNSS telemetry, not public TLEs, v1.0 only.
 
+## Design decisions
+
+dbt's own guide asks that deviations from its conventions be reasoned through and
+declared explicitly rather than left implicit. Ours:
+
+**Marts keep `dim_`/`fct_` prefixes.** dbt now recommends naming marts as plain
+business entities (`customers.sql`). We use Kimball prefixes because the marts
+*are* a star schema and the grain of each is the thing a reader most needs to
+know. Consistent throughout; staging and intermediate follow dbt's `stg_`/`int_`.
+
+**Bronze is files, not a warehouse schema.** Sources are declared in
+`__sources.yml` and reached through dbt-duckdb's `external_location`, so bronze
+stays a plain partitioned-parquet lakehouse while still appearing in dbt lineage.
+This keeps the raw layer independent of the warehouse and re-readable by anything
+that speaks parquet.
+
+**`int_satellite_daily_state` is incremental with a lookback, not a watermark.**
+Space-Track republishes revised element sets for epochs it has already issued, so
+a day loaded last week can legitimately change. A strict `> max(date)` filter
+would never revisit it and the correction would be lost silently. A trailing
+window plus `delete+insert` picks it up, and is idempotent — verified by
+re-running and confirming zero duplicate keys.
+
+**Anomalies are labelled, not filtered.** `orbit_regime` and
+`is_implausible_decay` classify unconverged post-deployment element sets and
+reentering satellites rather than dropping them. Range tests are scoped to
+`orbit_regime = 'operational'`, so the tests stay strict where strictness is
+meaningful instead of being widened until everything passes.
+
+**Coverage loss is measured, not assumed away.** `fct_catalogue_coverage` counts
+how many satellites fail to resolve to a generation each day. The medallion
+pattern's known weakness is that bad data travels a long way before anyone
+notices; this is the boundary check at the dimension join.
+
+**dev and ci are separate targets.** A fixture build writes to `ci.duckdb` so it
+can never overwrite real data.
+
 ## Layout
 
 ```
@@ -184,6 +221,7 @@ src/starlink_drag/
   config.py              paths, layers, credentials, verified API parameters
   generation_map.py      GCAT classification, coverage, validation
   build.py               CLI: build + validate the generation map
+  backfill.py            CLI: smoke test, scoped windows, resumable load
   fixtures.py            synthetic bronze for offline dev and CI
   ingest/
     spacetrack.py        rate-limited, resumable GP-history loader
@@ -191,11 +229,26 @@ src/starlink_drag/
   orchestration/
     assets.py            Dagster assets (gp_history is daily-partitioned)
     definitions.py       jobs, schedules, dbt integration
+
 dbt/models/
-  staging/               typed views over bronze parquet
-  marts/                 dim_satellite, fct_satellite_day
-tests/                   27 tests: classification, rate limiting, partition semantics
+  staging/
+    __sources.yml        bronze + interim sources via external_location
+    stg_gp_history.sql   typed, deduplicated view
+    stg_omni.sql         fill sentinels nulled, Kp rescaled
+  intermediate/
+    int_satellite_daily_state.sql   incremental daily aggregation
+    int_satellite_decay_rate.sql    centred difference, regime classification
+    int_space_weather_daily.sql     daily OMNI rollup
+  marts/
+    dim_satellite.sql
+    fct_satellite_day.sql
+    fct_catalogue_coverage.sql      data-quality boundary check
+    fct_v2_drag_response.sql        conditioned analysis panel
+
+tests/                   unit tests: classification, rate limiting, partitions
 ```
+
+Each model has its own `.yml` carrying description and tests.
 
 ## Data sources
 

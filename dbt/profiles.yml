@@ -5,6 +5,13 @@ starlink_drag:
       type: duckdb
       path: "../data/warehouse.duckdb"
       threads: 4
-      extensions:
-        - httpfs
-        - parquet
+      extensions: [httpfs, parquet]
+
+    # Separate database so a fixture build can never overwrite real data.
+    # CI uses this target; it is also what you want locally when testing the
+    # synthetic path.
+    ci:
+      type: duckdb
+      path: "../data/ci.duckdb"
+      threads: 4
+      extensions: [httpfs, parquet]

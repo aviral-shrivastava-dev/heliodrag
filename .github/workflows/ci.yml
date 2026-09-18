@@ -67,6 +67,7 @@ jobs:
         working-directory: dbt
         run: >
           dbt build
+          --target ci
           --vars '{gp_history_path: ../data/fixtures/bronze/gp_history,
                    omni_path: ../data/fixtures/bronze/omni,
                    interim_path: ../data/fixtures/interim}'

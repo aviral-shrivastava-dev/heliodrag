@@ -8,7 +8,7 @@
 with source as (
 
     select *
-    from read_parquet('{{ var("interim_path") }}/starlink_generation_map.parquet')
+    from {{ source('interim', 'starlink_generation_map') }}
 
 )
 

@@ -1,0 +1,71 @@
+version: 2
+models:
+- name: fct_satellite_day
+  description: 'One row per satellite per UTC day: decay rate, orbital state, and the space-weather conditions
+    that drove it.
+
+    '
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - norad_id
+      - observation_date
+  columns:
+  - name: norad_id
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_satellite')
+        field: norad_id
+  - name: observation_date
+    tests:
+    - not_null
+  - name: orbit_regime
+    description: '`operational` (periapsis 200-700 km), `reentering` (<200 km, final days) or `unconverged_or_transfer`
+      (>700 km, element sets that have not settled after deployment). Range tests below are scoped to
+      the operational regime, because the other two are real states with extreme but genuine values.
+
+      '
+    tests:
+    - not_null
+    - accepted_values:
+        values:
+        - operational
+        - reentering
+        - unconverged_or_transfer
+  - name: semimajor_axis_km
+    description: Starlink operates between roughly 300 and 700 km altitude.
+    tests:
+    - dbt_utils.accepted_range:
+        min_value: 6500
+        max_value: 7500
+        config:
+          where: orbit_regime = 'operational'
+  - name: decay_rate_km_per_day
+    description: 'Null at series edges and across gaps longer than 4 days, which is expected rather than
+      a defect.
+
+      '
+    tests:
+    - dbt_utils.accepted_range:
+        min_value: -100
+        max_value: 100
+        config:
+          where: 'decay_rate_km_per_day is not null and orbit_regime = ''operational'' and not is_implausible_decay
+
+            '
+  - name: kp_max
+    tests:
+    - dbt_utils.accepted_range:
+        min_value: 0
+        max_value: 9
+        config:
+          where: kp_max is not null
+  - name: dst_min_nt
+    description: The 1859 Carrington event is estimated near -900 nT.
+    tests:
+    - dbt_utils.accepted_range:
+        min_value: -1000
+        max_value: 100
+        config:
+          where: dst_min_nt is not null

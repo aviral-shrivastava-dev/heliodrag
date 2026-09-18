@@ -1,0 +1,50 @@
+version: 2
+models:
+- name: dim_satellite
+  description: 'One row per Starlink payload, carrying the hardware generation every downstream analysis
+    stratifies by. Sourced from GCAT via `starlink_drag.build`, which applies the mass-banding classification
+    and its validation suite.
+
+    '
+  columns:
+  - name: norad_id
+    description: NORAD catalogue number; the join key to all orbital data.
+    tests:
+    - unique
+    - not_null
+  - name: generation
+    description: v0.9 | v1.0 | v1.5 | v2-mini | v2-mini-opt | v2-mini-dtc
+    tests:
+    - not_null
+    - accepted_values:
+        values:
+        - v0.9
+        - v1.0
+        - v1.5
+        - v2-mini
+        - v2-mini-opt
+        - v2-mini-dtc
+  - name: label_confidence
+    description: '`high` where GCAT states the bus outright (all Gen2), `medium` where the generation
+      is inferred from launch mass (all Gen1).
+
+      '
+    tests:
+    - accepted_values:
+        values:
+        - high
+        - medium
+  - name: span_m
+    tests:
+    - not_null
+    - accepted_values:
+        values:
+        - 9.0
+        - 29.0
+        quote: false
+  - name: launch_mass_kg
+    tests:
+    - not_null
+    - dbt_utils.accepted_range:
+        min_value: 200
+        max_value: 1000

@@ -10,11 +10,7 @@
 with source as (
 
     select *
-    from read_parquet(
-        '{{ var("omni_path") }}/**/*.parquet',
-        hive_partitioning = true,
-        union_by_name = true
-    )
+    from {{ source('bronze', 'omni') }}
 
 )
 

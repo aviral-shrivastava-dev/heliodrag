@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: int_satellite_daily_state
+    description: >
+      One row per satellite per UTC day, collapsing many GP records via median.
+      Incremental with a trailing lookback, because Space-Track republishes
+      revised element sets for epochs it has already issued -- a strict watermark
+      would never revisit those days and would silently lose the correction.
+    columns:
+      - name: norad_id
+        tests: [not_null]
+      - name: observation_date
+        tests: [not_null]
+      - name: gp_records
+        description: How many GP records were collapsed into this day.
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 1
+              inclusive: true
+
+  - name: int_satellite_decay_rate
+    description: >
+      Adds the centred-difference decay rate, altitude shell and orbit-regime
+      classification. Full rebuild: the window functions need each satellite's
+      entire series.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [norad_id, observation_date]
+    columns:
+      - name: orbit_regime
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["operational", "reentering", "unconverged_or_transfer"]
+
+  - name: int_space_weather_daily
+    description: Daily rollup of hourly OMNI, matching the satellite-day grain.
+    columns:
+      - name: observation_date
+        tests: [not_null, unique]

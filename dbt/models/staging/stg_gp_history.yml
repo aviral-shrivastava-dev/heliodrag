@@ -1,0 +1,20 @@
+version: 2
+models:
+- name: stg_gp_history
+  description: 'Typed, deduplicated view over bronze GP-history partitions. Space-Track occasionally re-issues
+    a record for an epoch it already published, so the same (norad_id, epoch) can appear in more than
+    one partition; the most recently loaded copy wins.
+
+    '
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - norad_id
+      - epoch
+  columns:
+  - name: norad_id
+    tests:
+    - not_null
+  - name: epoch
+    tests:
+    - not_null

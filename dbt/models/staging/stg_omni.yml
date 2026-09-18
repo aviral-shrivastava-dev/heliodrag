@@ -1,0 +1,19 @@
+version: 2
+models:
+- name: stg_omni
+  description: 'Typed view over bronze OMNI with fill sentinels nulled and Kp rescaled from the server''s
+    Kp x 10 integer encoding.
+
+    '
+  columns:
+  - name: observed_at
+    tests:
+    - not_null
+    - unique
+  - name: kp
+    tests:
+    - dbt_utils.accepted_range:
+        min_value: 0
+        max_value: 9
+        config:
+          where: kp is not null

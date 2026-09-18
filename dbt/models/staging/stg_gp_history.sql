@@ -9,11 +9,7 @@
 with source as (
 
     select *
-    from read_parquet(
-        '{{ var("gp_history_path") }}/**/*.parquet',
-        hive_partitioning = true,
-        union_by_name = true
-    )
+    from {{ source('bronze', 'gp_history') }}
 
 ),
 
