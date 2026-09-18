@@ -28,7 +28,7 @@ and a hardware dimension that no public catalogue actually publishes.
 
 | Layer | Choice | Why |
 |---|---|---|
-| Orchestration | Dagster | Assets map 1:1 onto tables; daily partitions give per-day retry and resume on a rate-limited backfill. Airflow doesn't run natively on Windows. |
+| Orchestration | Dagster **and** Airflow | Assets map 1:1 onto tables; daily partitions give per-day retry and resume on a rate-limited backfill. Both run the *same* pipeline — neither owns logic, each calls the same CLI entrypoints and dbt project. |
 | Transformation | dbt-core + DuckDB | Transformations as tested, documented SQL. DuckDB reads partitioned parquet in place — no load step. |
 | Storage | Partitioned Parquet (bronze) → DuckDB (marts) | Hive partitioning by day; `_SUCCESS` markers make completeness explicit. |
 | Quality | dbt tests + a validation suite in Python | 46 dbt tests plus 27 unit tests; the generation map is additionally checked against externally known facts. |

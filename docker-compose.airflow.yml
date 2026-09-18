@@ -1,0 +1,99 @@
+# Airflow running the same pipeline as the Dagster definitions.
+#
+# Deliberately slimmer than Airflow's published compose file, which brings up
+# seven services including Redis, a Celery worker, a triggerer and Flower. With
+# LocalExecutor none of that is needed: the scheduler runs tasks in subprocesses,
+# which is the right shape for a single-node pipeline whose bottleneck is an
+# external API rate limit rather than local compute.
+#
+#   docker compose -f docker-compose.airflow.yml up -d
+#   open http://localhost:8081   (airflow / airflow)
+#
+# Port 8081 so it can run alongside the Redpanda console on 8080.
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.10.5-python3.12
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    # Backfilling 662 days would otherwise flood the scheduler with runs that
+    # then queue behind the rate limiter anyway.
+    AIRFLOW__SCHEDULER__MAX_DAGRUNS_TO_CREATE_PER_LOOP: "5"
+    PYTHONPATH: /opt/airflow/project/src
+    _PIP_ADDITIONAL_REQUIREMENTS: >-
+      pandas>=2.0 pyarrow>=14 duckdb>=1.0 requests>=2.31 tenacity>=8.2
+      dbt-core>=1.8 dbt-duckdb>=1.8
+  volumes:
+    - ./orchestration/airflow/dags:/opt/airflow/dags
+    - ./orchestration/airflow/logs:/opt/airflow/logs
+    - ./src:/opt/airflow/project/src
+    - ./dbt:/opt/airflow/project/dbt
+    # Bind-mounted so a backfill's output survives the container and stays
+    # queryable from the host with DuckDB.
+    - ./data:/opt/airflow/project/data
+  env_file:
+    - path: .env
+      required: false
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username airflow --password airflow \
+          --firstname Data --lastname Engineer \
+          --role Admin --email admin@example.com || true
+    restart: "no"
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8081:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  airflow-db:
