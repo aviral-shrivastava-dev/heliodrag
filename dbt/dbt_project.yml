@@ -1,0 +1,34 @@
+name: starlink_drag
+version: "0.1.0"
+config-version: 2
+
+profile: starlink_drag
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # Bronze lives outside the warehouse as partitioned parquet; models read it
+  # through DuckDB's parquet scanner rather than a copied-in staging table.
+  #
+  # Each source gets its own path var so they can be overridden independently --
+  # e.g. running the orbital models against a synthetic fixture while still
+  # reading real space weather:
+  #   dbt run --vars '{gp_history_path: ../data/fixtures/bronze/gp_history}'
+  gp_history_path: "../data/bronze/gp_history"
+  omni_path: "../data/bronze/omni"
+  interim_path: "../data/interim"
+
+models:
+  starlink_drag:
+    staging:
+      # Staging stays as views: it is thin renaming and typing, and materialising
+      # it would double the storage of the largest table in the project.
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts

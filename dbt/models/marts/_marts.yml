@@ -1,0 +1,89 @@
+version: 2
+
+models:
+  - name: dim_satellite
+    description: >
+      One row per Starlink payload, carrying the hardware generation every
+      downstream analysis stratifies by. Sourced from GCAT via
+      `starlink_drag.build`, which applies the mass-banding classification and
+      its validation suite.
+    columns:
+      - name: norad_id
+        description: NORAD catalogue number; the join key to all orbital data.
+        tests:
+          - unique
+          - not_null
+      - name: generation
+        description: v0.9 | v1.0 | v1.5 | v2-mini | v2-mini-opt | v2-mini-dtc
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["v0.9", "v1.0", "v1.5", "v2-mini", "v2-mini-opt", "v2-mini-dtc"]
+      - name: label_confidence
+        description: >
+          `high` where GCAT states the bus outright (all Gen2), `medium` where the
+          generation is inferred from launch mass (all Gen1).
+        tests:
+          - accepted_values:
+              values: ["high", "medium"]
+      - name: span_m
+        tests:
+          - not_null
+          - accepted_values:
+              values: [9.0, 29.0]
+              quote: false
+      - name: launch_mass_kg
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 200
+              max_value: 1000
+
+  - name: fct_satellite_day
+    description: >
+      One row per satellite per UTC day: decay rate, orbital state, and the
+      space-weather conditions that drove it.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [norad_id, observation_date]
+    columns:
+      - name: norad_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_satellite')
+              field: norad_id
+      - name: observation_date
+        tests:
+          - not_null
+      - name: semimajor_axis_km
+        description: Starlink operates between roughly 300 and 700 km altitude.
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 6500     # ~120 km altitude; below this it has reentered
+              max_value: 7500     # ~1100 km altitude
+      - name: decay_rate_km_per_day
+        description: >
+          Null at series edges and across gaps longer than 4 days, which is
+          expected rather than a defect.
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: -50
+              max_value: 50
+              config:
+                where: "decay_rate_km_per_day is not null"
+      - name: kp_max
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 9
+              config:
+                where: "kp_max is not null"
+      - name: dst_min_nt
+        description: The 1859 Carrington event is estimated near -900 nT.
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: -1000
+              max_value: 100
+              config:
+                where: "dst_min_nt is not null"

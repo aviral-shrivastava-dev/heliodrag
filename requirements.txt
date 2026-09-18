@@ -1,0 +1,22 @@
+# Core data
+pandas>=2.0
+pyarrow>=14
+numpy>=1.26
+duckdb>=1.0
+
+# Ingestion
+requests>=2.31
+tenacity>=8.2
+
+# Orchestration
+dagster>=1.9
+dagster-webserver>=1.9
+dagster-duckdb>=0.25
+dagster-dbt>=0.25
+
+# Transformation
+dbt-core>=1.8
+dbt-duckdb>=1.8
+
+# Test
+pytest>=8.0
