@@ -22,7 +22,7 @@ Start here:
 | Phase | Scope | Technical | Plain |
 | --- | --- | --- | --- |
 | 0 | Scaffold: packaging, tooling, CI, ADRs | [phase-0.md](phase-0.md) | [phase-0-plain.md](phase-0-plain.md) |
-| 1 | Ingestion: API clients, dlt into bronze Iceberg | written when built | |
+| 1 | Ingestion: API clients, dlt into bronze Iceberg | [phase-1.md](phase-1.md) | [phase-1-plain.md](phase-1-plain.md) |
 | 2 | Transformation: dbt staging, intermediate, marts | | |
 | 3 | Orchestration: partitioned Dagster assets | | |
 | 4 | Hardening: coverage, nightly CI, runbook, Terraform | | |

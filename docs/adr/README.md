@@ -31,3 +31,5 @@ consequences is not finished.
 | --- | --- | --- |
 | [0001](0001-packaging-with-uv.md) | Packaging with uv and a src layout | accepted |
 | [0002](0002-dagster-over-airflow.md) | Dagster over Airflow | accepted |
+| [0003](0003-sliding-window-rate-limiter.md) | A sliding-window rate limiter, not a token bucket | accepted |
+| [0004](0004-bronze-partition-replace-and-byte-identity.md) | Bronze replaces partitions; provenance lives outside the data files | accepted |

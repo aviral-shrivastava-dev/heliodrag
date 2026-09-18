@@ -1,0 +1,48 @@
+{
+  "HAPI": "2.0",
+  "resourceURL": "https://cdaweb.gsfc.nasa.gov/misc/NotesO.html#OMNI2_H0_MRG1HR",
+  "contact": "J.H. King, N. Papitashvili @ ADNET, NASA GSFC",
+  "parameters": [
+    {
+      "name": "Time",
+      "length": 24,
+      "units": "UTC",
+      "type": "isotime",
+      "fill": null
+    },
+    {
+      "name": "F10_INDEX1800",
+      "description": "F10.7 - Daily 10.7 cm solar radio flux, units: 10**(-22) Joules/second/square-meter/Hertz, from NGDC (1963/001-2026/243), (half-hour midpoint)",
+      "units": " ",
+      "type": "double",
+      "fill": "999.9"
+    },
+    {
+      "name": "KP1800",
+      "description": "Kp - 3-hour Kp*10 (Kp=1-,1,1+ corresponds to 7,10,13), fromNGDC (1963/001-2026/243) (half-hour midpoint)",
+      "units": null,
+      "type": "integer",
+      "fill": "99"
+    },
+    {
+      "name": "DST1800",
+      "description": "Dst - 1-hour Dst index (1963/001-2014/366), Provisional Dst (2021/001-2026/212), Quick-look Dst (2026/213-2026/243), from WDC Kyoto (half-hour midpoint)",
+      "units": "nT",
+      "type": "integer",
+      "fill": "99999"
+    },
+    {
+      "name": "AP_INDEX1800",
+      "description": "ap - 3-hour ap-index (1963/001-2026/243), from NGDC (half-hour midpoint)",
+      "units": "nT",
+      "type": "integer",
+      "fill": "999"
+    }
+  ],
+  "startDate": "1963-01-01T00:00:00Z",
+  "stopDate": "2026-09-17T12:00:00Z",
+  "status": {
+    "code": 1200,
+    "message": "OK"
+  }
+}

@@ -74,7 +74,10 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["E501"]
+# SIM117: `with client: with pytest.raises(...)` reads better nested than
+# combined -- the two contexts mean different things and combining them hides
+# which call is expected to raise.
+"tests/**" = ["E501", "SIM117"]
 
 [tool.mypy]
 python_version = "3.12"

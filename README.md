@@ -9,8 +9,9 @@ This repository is the pipeline that answers it: a partitioned, idempotent,
 reproducible path from two public APIs to a set of gold marts, a Streamlit
 explorer, and a regression that controls for the obvious confounders.
 
-> **Status: Phase 0 (scaffold).** The structure, packaging, tooling and CI are in
-> place. Ingestion, transformation and orchestration are not yet built. See
+> **Status: Phase 1 (ingestion).** Space-Track and NASA OMNI land in partitioned
+> bronze Iceberg tables, validated at the boundary, with byte-identical partition
+> re-runs. Transformation and orchestration are not yet built. See
 > [the build order](#build-order) for what lands when.
 
 ## Quick start
@@ -70,9 +71,9 @@ NASA OMNI data, obtained via the SPDF HAPI server, is public domain.
 
 | Phase | Scope | State |
 | --- | --- | --- |
-| 0 | Scaffold: packaging, tooling, CI, ADRs | **done** |
-| 1 | Ingestion: Space-Track and HAPI clients, dlt into bronze Iceberg | next |
-| 2 | Transformation: dbt staging, intermediate, marts | |
+| 0 | Scaffold: packaging, tooling, CI, ADRs | done |
+| 1 | Ingestion: Space-Track and HAPI clients, dlt into bronze Iceberg | **done** |
+| 2 | Transformation: dbt staging, intermediate, marts | next |
 | 3 | Orchestration: partitioned Dagster assets, asset checks, CLI parity | |
 | 4 | Hardening: coverage, integration tests, nightly CI, runbook, Terraform | |
 | 5 | Serving: Streamlit explorer, full README, published dbt docs | |
@@ -92,6 +93,7 @@ not fewer facts.
 | --- | --- | --- |
 | What this project is, and why the science is hard | [overview.md](docs/phases/overview.md) | [overview-plain.md](docs/phases/overview-plain.md) |
 | Phase 0 — scaffold | [phase-0.md](docs/phases/phase-0.md) | [phase-0-plain.md](docs/phases/phase-0-plain.md) |
+| Phase 1 — ingestion | [phase-1.md](docs/phases/phase-1.md) | [phase-1-plain.md](docs/phases/phase-1-plain.md) |
 
 - [docs/phases/](docs/phases/) — index, and what each phase document covers
 - [docs/adr/](docs/adr/) — architecture decision records, one per decision
