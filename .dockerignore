@@ -1,9 +1,0 @@
-.venv/
-.git/
-data/
-.dagster/
-dbt/target/
-dbt/dbt_packages/
-**/__pycache__/
-.pytest_cache/
-.env

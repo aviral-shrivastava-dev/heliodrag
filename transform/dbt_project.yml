@@ -1,0 +1,39 @@
+# dbt is always invoked from the repository root via the Makefile, so relative
+# paths in profiles.yml resolve against the root and not against this directory.
+name: starlink_drag
+version: "0.1.0"
+config-version: 2
+profile: starlink_drag
+
+require-dbt-version: [">=1.9.0", "<2.0.0"]
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  starlink_drag:
+    # Medallion layers are tags, not folders. Bronze is the raw Iceberg landing
+    # zone and lives outside dbt entirely.
+    staging:
+      +materialized: view
+      +tags: ["silver"]
+    intermediate:
+      +materialized: view
+      +tags: ["silver"]
+    marts:
+      +materialized: table
+      +tags: ["gold"]
+
+seeds:
+  starlink_drag:
+    +tags: ["silver"]
+
+flags:
+  send_anonymous_usage_stats: false

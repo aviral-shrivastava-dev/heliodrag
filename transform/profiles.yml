@@ -1,0 +1,21 @@
+# Committed deliberately: it contains no secrets. The DuckDB file lives under
+# data/, which is gitignored. Paths resolve against the repository root because
+# the Makefile always invokes dbt from there.
+starlink_drag:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'data/warehouse.duckdb') }}"
+      threads: 4
+      extensions:
+        - httpfs
+        - parquet
+
+    ci:
+      # Ephemeral database seeded from tests/fixtures; never the real warehouse.
+      type: duckdb
+      path: "data/ci.duckdb"
+      threads: 2
+      extensions:
+        - parquet

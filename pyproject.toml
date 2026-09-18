@@ -1,20 +1,103 @@
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "starlink-drag-atlas"
 version = "0.1.0"
-description = "Per-generation Starlink orbital decay vs space weather: a public-data pipeline"
-requires-python = ">=3.11"
+description = "Per-generation Starlink orbital-decay sensitivity to space weather over Solar Cycle 25"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12,<3.13"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+dependencies = [
+    # ingestion
+    "dlt[duckdb,filesystem,parquet]>=1.6",
+    "httpx>=0.27",
+    # lake + engine
+    "pyiceberg[s3fs,pyarrow,duckdb]>=0.8",
+    "duckdb>=1.1",
+    "polars>=1.17",
+    "pyarrow>=18.0",
+    # transformation
+    "dbt-core>=1.9",
+    "dbt-duckdb>=1.9",
+    # orchestration
+    "dagster>=1.9",
+    "dagster-dbt>=0.25",
+    # data quality
+    "pandera[polars]>=0.22",
+    # config + cli
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "typer>=0.15",
+    # serving
+    "streamlit>=1.40",
+]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-filterwarnings = ["ignore::DeprecationWarning"]
+[project.scripts]
+starlink-drag = "starlink_drag.cli:app"
+
+[dependency-groups]
+dev = [
+    "dagster-webserver>=1.9",
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "respx>=0.22",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/starlink_drag"]
+
+# --------------------------------------------------------------------------
+# tooling
+# --------------------------------------------------------------------------
 
 [tool.ruff]
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "analysis"]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplify
+    "PTH",  # prefer pathlib
+    "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+# analysis/ joins this list in Phase 7, when it first contains modules.
+files = ["src", "tests"]
+strict = true
+# Third-party packages in this stack ship partial or absent type information.
+# We keep our own code strict and stop at the boundary.
+ignore_missing_imports = true
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = ["dagster.*", "dlt.*", "pyiceberg.*", "pandera.*", "streamlit.*"]
+follow_imports = "skip"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"
+markers = [
+    "integration: exercises more than one component; still never hits the network",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["src/starlink_drag"]
+branch = true

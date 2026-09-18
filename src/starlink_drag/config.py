@@ -1,119 +1,100 @@
-"""Central configuration: paths, layer layout, and credentials.
+"""Runtime configuration.
 
-Credentials are read from the environment (or a local `.env`), never from code.
-`.env` is gitignored; see `.env.example` for the required keys.
+Every knob in this project is an environment variable read here. Nothing else
+in the codebase calls ``os.environ``. Secrets are wrapped in ``SecretStr`` so
+that an accidental ``repr`` or a Dagster run-config dump cannot leak them.
+
+See ``.env.example`` for the full list and how to obtain each credential.
 """
 
 from __future__ import annotations
 
-import dataclasses
-import functools
-import os
-import pathlib
+import datetime as dt
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DATA_ROOT = PROJECT_ROOT / "data"
-BRONZE = DATA_ROOT / "bronze"   # raw vendor payloads, append-only, never edited
-SILVER = DATA_ROOT / "silver"   # typed, deduplicated, conformed
-GOLD = DATA_ROOT / "gold"       # analysis-ready marts
-WAREHOUSE = DATA_ROOT / "warehouse.duckdb"
+_ENV_FILE = ".env"
 
-# Space-Track publishes these limits in its API documentation. We stay a margin
-# under both because exceeding them earns a temporary ban, which would cost far
-# more time than the throttling does.
-SPACETRACK_MAX_PER_MINUTE = 20   # documented ceiling: 30
-SPACETRACK_MAX_PER_HOUR = 250    # documented ceiling: 300
-
-SPACETRACK_BASE = "https://www.space-track.org"
-
-# Orbital elements needed for decay-rate work. Requesting a narrow predicate list
-# rather than full records cuts the backfill from tens of GB to a few GB, which is
-# the difference between fitting in a free tier and not.
-GP_PREDICATES = [
-    "NORAD_CAT_ID", "OBJECT_NAME", "OBJECT_ID", "EPOCH",
-    "MEAN_MOTION", "ECCENTRICITY", "INCLINATION", "RA_OF_ASC_NODE",
-    "ARG_OF_PERICENTER", "MEAN_ANOMALY", "BSTAR", "MEAN_MOTION_DOT",
-    "MEAN_MOTION_DDOT", "SEMIMAJOR_AXIS", "PERIAPSIS", "APOAPSIS",
-    "REV_AT_EPOCH", "EPHEMERIS_TYPE",
-]
-
-# NASA OMNI low-resolution (hourly) dataset on the SPDF HAPI server.
-OMNI_HAPI_BASE = "https://cdaweb.gsfc.nasa.gov/hapi"
-OMNI_DATASET = "OMNI2_H0_MRG1HR"
-
-# Parameter names verified against the live HAPI /info response. They are NOT the
-# names used in OMNI documentation -- the HAPI server suffixes them with the
-# cadence (1800 = half-hour midpoint of an hourly record).
-#
-# KP1800 is Kp x 10 as an integer (Kp=1- is stored as 7). The silver layer
-# divides it; bronze keeps the server's own encoding.
-OMNI_PARAMETERS = [
-    "F10_INDEX1800",         # F10.7 daily solar radio flux
-    "KP1800",                # Kp x 10, 3-hourly
-    "AP_INDEX1800",          # ap index, 3-hourly
-    "DST1800",               # Dst, hourly
-    "AE1800",                # auroral electrojet
-    "R1800",                 # daily sunspot number V2
-    "Pressure1800",          # solar wind flow pressure, nPa
-    "V1800",                 # solar wind speed, km/s
-    "BZ_GSM1800",            # IMF Bz in GSM -- southward Bz drives storm coupling
-]
-
-# Sentinel values the server returns for "no data", read from the HAPI /info
-# response. Bronze preserves them; silver converts them to nulls.
-OMNI_FILL_VALUES = {
-    "F10_INDEX1800": 999.9,
-    "KP1800": 99,
-    "AP_INDEX1800": 999,
-    "DST1800": 99999,
-    "AE1800": 9999,
-    "R1800": 999,
-    "Pressure1800": 99.99,
-    "V1800": 9999.0,
-    "BZ_GSM1800": 999.9,
-}
-
-# Starlink orbital history starts with the v0.9 batch.
-HISTORY_START = "2019-05-24"
+LakeBackend = Literal["local", "r2"]
 
 
-def _load_dotenv() -> None:
-    """Populate os.environ from a local .env if present. No-op when absent."""
-    path = PROJECT_ROOT / ".env"
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+class SpaceTrackSettings(BaseSettings):
+    """Credentials and limits for https://www.space-track.org.
+
+    The rate limits are not advisory. Space-Track blocks accounts that exceed
+    them, so they are configuration rather than constants only to let tests
+    drive the limiter quickly -- never to raise them in production.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="SPACETRACK_", env_file=_ENV_FILE, extra="ignore")
+
+    identity: str = ""
+    password: SecretStr = SecretStr("")
+    base_url: str = "https://www.space-track.org"
+
+    requests_per_minute: int = Field(default=29, gt=0, le=29)
+    requests_per_hour: int = Field(default=299, gt=0, le=299)
+    max_retries: int = Field(default=5, ge=0)
+    norad_ids_per_request: int = Field(default=200, gt=0)
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.identity) and bool(self.password.get_secret_value())
 
 
-@dataclasses.dataclass(frozen=True)
-class SpaceTrackCredentials:
-    identity: str
-    password: str
+class HapiSettings(BaseSettings):
+    """NASA OMNI via the SPDF HAPI server. Public, no authentication."""
+
+    model_config = SettingsConfigDict(env_prefix="HAPI_", env_file=_ENV_FILE, extra="ignore")
+
+    base_url: str = "https://cdaweb.gsfc.nasa.gov/hapi"
+    dataset: str = "OMNI2_H0_MRG1HR"
+    timeout_seconds: float = Field(default=60.0, gt=0)
 
 
-@functools.lru_cache(maxsize=1)
-def spacetrack_credentials() -> SpaceTrackCredentials:
-    """Read Space-Track credentials, failing loudly with actionable guidance."""
-    _load_dotenv()
-    identity = os.environ.get("SPACETRACK_IDENTITY", "")
-    password = os.environ.get("SPACETRACK_PASSWORD", "")
-    if not identity or not password:
-        raise RuntimeError(
-            "Space-Track credentials missing. Register free at "
-            "https://www.space-track.org and create a .env file containing:\n"
-            "  SPACETRACK_IDENTITY=your@email\n"
-            "  SPACETRACK_PASSWORD=yourpassword"
-        )
-    return SpaceTrackCredentials(identity=identity, password=password)
+class LakeSettings(BaseSettings):
+    """Object storage holding the bronze Iceberg tables.
+
+    ``local`` points at MinIO from ``infra/docker``; ``r2`` at Cloudflare R2.
+    The two are S3-compatible, so only the endpoint and credentials differ.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="LAKE_", env_file=_ENV_FILE, extra="ignore")
+
+    backend: LakeBackend = "local"
+    endpoint_url: str = "http://localhost:9000"
+    bucket: str = "starlink-drag-atlas"
+    access_key_id: SecretStr = SecretStr("")
+    secret_access_key: SecretStr = SecretStr("")
+    region: str = "auto"
 
 
-def ensure_layers() -> None:
-    """Create the lakehouse directory layout if it does not exist."""
-    for path in (BRONZE, SILVER, GOLD):
-        path.mkdir(parents=True, exist_ok=True)
+class Settings(BaseSettings):
+    """Top-level settings object. Obtain it via :func:`get_settings`."""
+
+    model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
+
+    data_dir: Path = Path("data")
+    duckdb_path: Path = Path("data/warehouse.duckdb")
+
+    pipeline_start_date: dt.date = dt.date(2020, 1, 1)
+    log_level: str = "INFO"
+
+    spacetrack: SpaceTrackSettings = Field(default_factory=SpaceTrackSettings)
+    hapi: HapiSettings = Field(default_factory=HapiSettings)
+    lake: LakeSettings = Field(default_factory=LakeSettings)
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the process-wide settings, read from the environment once.
+
+    Cached so that Dagster ops, the CLI and dbt's Python hooks all observe the
+    same values. Call ``get_settings.cache_clear()`` in tests that monkeypatch
+    the environment.
+    """
+    return Settings()

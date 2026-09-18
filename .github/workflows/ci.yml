@@ -2,82 +2,54 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # The test suite must pass with no credentials of any kind. If a test needs
+  # Space-Track or OMNI, it is testing the wrong thing -- use tests/fixtures.
+  PYTHONDONTWRITEBYTECODE: "1"
+  FORCE_COLOR: "1"
+
 jobs:
-  test:
+  quality:
+    name: lint, types, tests
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
+          version: "0.12.16"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
-      - name: Install
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+
+      - name: Lint and typecheck
+        run: make lint
+
+      - name: Test
+        run: make test
+
+      - name: Refuse raw data in the repository
+        # Space-Track data is covered by a US-government data-use agreement.
+        # Derived products only; the lake never enters git.
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Unit tests
-        run: pytest tests/ -q
-
-  pipeline:
-    # Builds and tests every dbt model against a synthetic fixture. No API
-    # credentials are involved, so the full transformation layer is verified on
-    # every pull request rather than only on a developer's machine.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          cache: pip
-
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Generate synthetic bronze
-        run: python -m starlink_drag.cli.fixtures
-        env:
-          PYTHONPATH: src
-
-      - name: dbt deps
-        working-directory: dbt
-        run: dbt deps
-        env:
-          DBT_PROFILES_DIR: .
-
-      - name: dbt build against fixtures
-        working-directory: dbt
-        run: >
-          dbt build
-          --target ci
-          --vars '{gp_history_path: ../data/fixtures/bronze/gp_history,
-                   omni_path: ../data/fixtures/bronze/omni,
-                   interim_path: ../data/fixtures/interim}'
-        env:
-          DBT_PROFILES_DIR: .
-
-      - name: Upload dbt artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dbt-target
-          path: dbt/target/
-          retention-days: 7
+          if git ls-files --error-unmatch data 2>/dev/null; then
+            echo "::error::files under data/ are tracked; they must not be"
+            exit 1
+          fi
+          echo "no tracked files under data/"

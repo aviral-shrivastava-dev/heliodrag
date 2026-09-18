@@ -1,27 +1,43 @@
+# Run on every commit: `make setup` installs the hook.
+# Run over everything: `pre-commit run --all-files`.
+default_language_version:
+  python: python3.12
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
       - id: check-added-large-files
-        args: [--maxkb=500]
+        args: ["--maxkb=512"]
       - id: check-merge-conflict
-      # Credentials must never reach a commit; .env is gitignored but a stray
-      # copy elsewhere would not be.
-      - id: detect-private-key
+      - id: check-toml
+      - id: check-yaml
+        args: ["--unsafe"] # dbt YAML uses Jinja
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: trailing-whitespace
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.8.6
     hooks:
       - id: ruff
-        args: [--fix]
+        args: ["--fix"]
       - id: ruff-format
 
-  - repo: https://github.com/sqlfluff/sqlfluff
-    rev: 3.2.5
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
     hooks:
-      - id: sqlfluff-lint
-        additional_dependencies: [sqlfluff-templater-dbt, dbt-duckdb]
-        args: [--dialect, duckdb]
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: ^(uv\.lock|\.env\.example)$
+
+  - repo: local
+    hooks:
+      # Raw Space-Track data is covered by a US-government data-use agreement.
+      # Derived products only -- never the source extracts.
+      - id: no-data-directory
+        name: refuse to commit anything under data/
+        entry: data/ is gitignored and must never be committed
+        language: fail
+        files: ^data/

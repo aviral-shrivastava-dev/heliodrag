@@ -1,0 +1,11 @@
+# CI runs on Linux; development here happens on Windows. Normalise to LF in the
+# repository and in the working tree so that the pre-commit line-ending hook and
+# git's autocrlf do not fight each other -- and so the Makefile's tab-indented
+# recipes survive the round trip.
+* text=auto eol=lf
+
+*.png  binary
+*.jpg  binary
+*.pdf  binary
+*.parquet binary
+*.duckdb  binary
