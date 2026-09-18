@@ -106,9 +106,10 @@ it on every PR.
 |---|---|
 | GCAT → `dim_satellite` | Done. 12,444 satellites, 100% labelled, validated. |
 | NASA OMNI → `stg_omni` | Done. 64,165 hourly rows, 2019-05-24 → present. |
-| Space-Track → bronze | Backfill running. 249/662 day-partitions, 1.74M satellite-days. |
-| dbt models | 9 models across 3 layers, 46 tests, all passing. |
+| Space-Track → bronze | Complete. 662/662 day-partitions, 1.2 GB, 5.56M satellite-days. |
+| dbt models | 10 models across 3 layers, 54 tests, all passing on the full dataset (2m12s build). |
 | Dagster | 8 assets, 2 jobs, daily schedule. |
+| Airflow | DAG verified in Docker; parses clean, 4 tasks, scheduler healthy. |
 | Streaming | Compose file ready; consumer not yet written. |
 | Dashboard | Not started. |
 
