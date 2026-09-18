@@ -9,10 +9,11 @@ This repository is the pipeline that answers it: a partitioned, idempotent,
 reproducible path from two public APIs to a set of gold marts, a Streamlit
 explorer, and a regression that controls for the obvious confounders.
 
-> **Status: Phase 2 (transformation).** A full year of 2024 is landed and
-> modelled: 5.96M element sets into 2.19M satellite-days, joined to space weather
-> and hardware generation, with 87 dbt tests green. Orchestration, serving and
-> the analysis are not yet built. See [the build order](#build-order).
+> **Status: Phase 3 (orchestration).** The pipeline runs as 20 partitioned
+> Dagster assets with 80 checks, rebuildable from 2020 to today with one
+> command. A full year of 2024 is landed and modelled: 5.96M element sets into
+> 2.19M satellite-days. Serving and the analysis are not yet built. See
+> [the build order](#build-order).
 
 ## Quick start
 
@@ -21,6 +22,9 @@ explorer, and a regression that controls for the obvious confounders.
 make setup          # create the venv, install everything, install git hooks
 make lint           # ruff + ruff-format + mypy
 make test           # pytest; never touches the network
+
+make backfill       # land and model everything from 2020 to yesterday
+make run            # Dagster UI at http://localhost:3000
 ```
 
 `make setup` copies `.env.example` to `.env` if you do not have one. Fill in your
@@ -73,9 +77,9 @@ NASA OMNI data, obtained via the SPDF HAPI server, is public domain.
 | --- | --- | --- |
 | 0 | Scaffold: packaging, tooling, CI, ADRs | done |
 | 1 | Ingestion: Space-Track and HAPI clients, dlt into bronze Iceberg | done |
-| 2 | Transformation: dbt staging, intermediate, marts | **done** |
-| 3 | Orchestration: partitioned Dagster assets, asset checks, CLI parity | next |
-| 4 | Hardening: coverage, integration tests, nightly CI, runbook, Terraform | |
+| 2 | Transformation: dbt staging, intermediate, marts | done |
+| 3 | Orchestration: partitioned Dagster assets, asset checks, CLI parity | **done** |
+| 4 | Hardening: coverage, integration tests, nightly CI, runbook, Terraform | next |
 | 5 | Serving: Streamlit explorer, full README, published dbt docs | |
 | 6 | Streaming (optional): Redpanda drag nowcast | |
 | 7 | Analysis: per-generation regression with bootstrap CIs, figures | |
@@ -95,6 +99,7 @@ not fewer facts.
 | Phase 0 — scaffold | [phase-0.md](docs/phases/phase-0.md) | [phase-0-plain.md](docs/phases/phase-0-plain.md) |
 | Phase 1 — ingestion | [phase-1.md](docs/phases/phase-1.md) | [phase-1-plain.md](docs/phases/phase-1-plain.md) |
 | Phase 2 — transformation | [phase-2.md](docs/phases/phase-2.md) | [phase-2-plain.md](docs/phases/phase-2-plain.md) |
+| Phase 3 — orchestration | [phase-3.md](docs/phases/phase-3.md) | [phase-3-plain.md](docs/phases/phase-3-plain.md) |
 
 - [docs/phases/](docs/phases/) — index, and what each phase document covers
 - [docs/adr/](docs/adr/) — architecture decision records, one per decision

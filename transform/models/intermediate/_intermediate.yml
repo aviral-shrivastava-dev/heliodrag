@@ -12,6 +12,16 @@ models:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [norad_id, epoch_at]
 
+  - name: int_omni__deduplicated
+    description: >
+      One space-weather record per hour, collapsing the duplicates that
+      append-only bronze leaves behind after a re-run.
+    columns:
+      - name: observed_at
+        data_tests: [not_null, unique]
+      - name: epoch_date
+        data_tests: [not_null]
+
   - name: int_satellite__generation_labeled
     description: >
       The current catalogue snapshot with a hardware generation attached from

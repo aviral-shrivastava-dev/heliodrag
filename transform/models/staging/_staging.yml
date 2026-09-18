@@ -30,9 +30,9 @@ models:
         data_tests: [not_null]
       - name: ingest_date
         data_tests: [not_null]
-    data_tests:
-      - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: [norad_id, ingest_date]
+    # No uniqueness assertion: bronze appends, so a repeated ingest on the same
+    # day duplicates the snapshot. int_satellite__generation_labeled collapses
+    # it and asserts uniqueness there.
 
   - name: stg_nasa__omni
     description: >
@@ -40,7 +40,11 @@ models:
       scale; OMNI transmits it as an integer multiple of ten.
     columns:
       - name: observed_at
-        data_tests: [not_null, unique]
+        description: >
+          Not unique here, and that is correct. Staging is 1:1 with bronze,
+          which is append-only, so re-running a partition leaves a duplicate.
+          Uniqueness is asserted on int_omni__deduplicated.
+        data_tests: [not_null]
       - name: kp_index
         data_tests:
           - dbt_expectations.expect_column_values_to_be_between:

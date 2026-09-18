@@ -1,6 +1,10 @@
 # Committed deliberately: it contains no secrets. The DuckDB file lives under
-# data/, which is gitignored. Paths resolve against the repository root because
-# the Makefile always invokes dbt from there.
+# data/, which is gitignored.
+#
+# DUCKDB_PATH should be absolute. The default below is relative and only works
+# when dbt is invoked from the repository root, which the Makefile does but
+# Dagster does not -- dagster-dbt runs dbt from the project directory, so the
+# dbt asset sets an absolute DUCKDB_PATH before invoking it.
 starlink_drag:
   target: dev
   outputs:

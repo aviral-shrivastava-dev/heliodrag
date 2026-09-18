@@ -22,5 +22,5 @@ select
     count(f10_7_sfu)                as hours_with_f10_7,
     count(dst_nt)                   as hours_with_dst
 
-from {{ ref('stg_nasa__omni') }}
+from {{ ref('int_omni__deduplicated') }}
 group by epoch_date

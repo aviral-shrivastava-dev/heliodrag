@@ -216,6 +216,83 @@ def seed_generations_command(
     typer.echo(report.describe())
 
 
+DAGSTER_MODULE = "starlink_drag.definitions"
+
+
+@app.command("backfill")
+def backfill_everything_command(
+    start: Annotated[
+        str, typer.Option(help="First partition, inclusive (YYYY-MM-DD).")
+    ] = "2020-01-01",
+    end: Annotated[
+        str | None,
+        typer.Option(help="Last partition, inclusive. Defaults to yesterday."),
+    ] = None,
+) -> None:
+    """Run the whole pipeline over a partition range, through Dagster.
+
+    One command for the full 2020-to-now backfill. The ingestion assets carry
+    BackfillPolicy.single_run, so the range is a handful of wide requests rather
+    than one run per day -- which at Space-Track's rate limit would take a week
+    and a half.
+
+    It issues three Dagster runs rather than one, because `--partition-range`
+    refuses a selection containing anything unpartitioned, and the catalogue
+    snapshot and everything downstream of bronze are unpartitioned by design:
+
+      1. the catalogue, which supplies the object list the elements need
+      2. the partitioned sources, over the whole range in a single run
+      3. the views, then dbt
+
+    `ingest backfill` is the same work without Dagster, for a plain scheduler.
+    """
+    last = end or (dt.date.today() - dt.timedelta(days=1)).isoformat()
+    partition_range = f"{start}...{last}"
+
+    steps: list[tuple[str, str, str | None]] = [
+        ("catalogue", "bronze_satcat", None),
+        ("sources", "bronze_omni,bronze_gp_history", partition_range),
+        ("views and models", "group:warehouse,group:silver,group:gold", None),
+    ]
+
+    for label, selection, span in steps:
+        typer.echo("")
+        typer.echo(f"[{label}] {selection}" + (f" over {span}" if span else ""))
+        code = _materialize(selection, span)
+        if code != 0:
+            typer.echo(f"[{label}] failed with exit code {code}", err=True)
+            raise typer.Exit(code=code)
+
+    typer.echo("")
+    typer.echo(f"backfill complete: {partition_range}")
+
+
+def _materialize(selection: str, partition_range: str | None) -> int:
+    """Invoke `dagster asset materialize` for one selection.
+
+    The selection is never "*": a bare asterisk is expanded by the shell into
+    the working directory's file list before Dagster sees it.
+    """
+    import subprocess
+    import sys
+
+    command = [
+        sys.executable,
+        "-m",
+        "dagster",
+        "asset",
+        "materialize",
+        "-m",
+        DAGSTER_MODULE,
+        "--select",
+        selection,
+    ]
+    if partition_range:
+        command += ["--partition-range", partition_range]
+
+    return subprocess.run(command, check=False).returncode
+
+
 @app.command("data-dictionary")
 def data_dictionary_command() -> None:
     """Regenerate docs/data_dictionary.md from dbt's manifest.

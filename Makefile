@@ -8,7 +8,7 @@ DBT := $(UV) run dbt
 DBT_FLAGS := --project-dir $(DBT_DIR) --profiles-dir $(DBT_DIR)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format typecheck test test-cov run build docs clean
+.PHONY: help setup lint format typecheck test test-cov run build backfill docs clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -43,6 +43,9 @@ run: ## Launch the Dagster UI at http://localhost:3000
 build: ## Sync bronze views, then run dbt build (models + tests)
 	$(UV) run starlink-drag warehouse sync
 	$(DBT) build $(DBT_FLAGS)
+
+backfill: ## Land and model everything from 2020 to yesterday, in one command
+	$(UV) run starlink-drag backfill
 
 docs: ## Build dbt docs into transform/target/
 	$(DBT) deps $(DBT_FLAGS)

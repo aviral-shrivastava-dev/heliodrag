@@ -15,9 +15,12 @@ with latest_snapshot as (
 
 catalogue as (
 
+    -- Bronze appends, so re-ingesting on a day already covered leaves a second
+    -- copy of that snapshot. The rows are identical, so any one is kept.
     select satcat.*
     from {{ ref('stg_spacetrack__satcat') }} as satcat
     inner join latest_snapshot using (ingest_date)
+    qualify row_number() over (partition by satcat.norad_id order by satcat.norad_id) = 1
 
 )
 
