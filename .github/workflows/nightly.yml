@@ -59,6 +59,13 @@ jobs:
       - name: Lint and typecheck
         run: make lint
 
+      - name: Parse the dbt project
+        # dagster-dbt reads transform/target/manifest.json when the definitions
+        # module is imported, and the manifest is generated rather than
+        # committed. Without this step every test that loads the asset graph
+        # fails with DagsterDbtManifestNotFoundError.
+        run: make manifest
+
       - name: Enforce the coverage floor on science/
         run: make test-science
 

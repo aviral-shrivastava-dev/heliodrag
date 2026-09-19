@@ -8,7 +8,7 @@ DBT := $(UV) run dbt
 DBT_FLAGS := --project-dir $(DBT_DIR) --profiles-dir $(DBT_DIR)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format typecheck test test-science test-cov run build backfill docs clean
+.PHONY: help setup lint format typecheck manifest test test-science test-cov run build backfill docs clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -31,19 +31,26 @@ format: ## Apply ruff fixes and formatting
 typecheck: ## mypy only
 	$(UV) run mypy
 
-test: ## Run the test suite (never touches the network)
+manifest: ## Build transform/target/manifest.json, which Dagster needs to load
+	@# dagster-dbt reads the manifest at import time, and it is generated rather
+	@# than committed. Without it, importing starlink_drag.definitions raises
+	@# DagsterDbtManifestNotFoundError -- which is how CI failed the first time
+	@# this repository was pushed, while every local run passed.
+	$(DBT) parse $(DBT_FLAGS)
+
+test: manifest ## Run the test suite (never touches the network)
 	$(UV) run pytest
 
-test-science: ## Enforce the coverage floor on science/, the pure-function core
+test-science: manifest ## Enforce the coverage floor on science/, the pure-function core
 	$(UV) run pytest tests/unit --cov=src/starlink_drag/science 		--cov-report=term-missing --cov-fail-under=90
 
 test-cov: ## Run tests with a coverage report for science/
 	$(UV) run pytest --cov --cov-report=term-missing
 
-run: ## Launch the Dagster UI at http://localhost:3000
+run: manifest ## Launch the Dagster UI at http://localhost:3000
 	$(UV) run dagster dev -m starlink_drag.definitions
 
-build: ## Sync bronze views, then run dbt build (models + tests)
+build: manifest ## Sync bronze views, then run dbt build (models + tests)
 	$(UV) run starlink-drag warehouse sync
 	$(DBT) build $(DBT_FLAGS)
 
