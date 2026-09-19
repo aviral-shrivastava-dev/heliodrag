@@ -8,7 +8,7 @@ DBT := $(UV) run dbt
 DBT_FLAGS := --project-dir $(DBT_DIR) --profiles-dir $(DBT_DIR)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format typecheck test test-cov run build backfill docs clean
+.PHONY: help setup lint format typecheck test test-science test-cov run build backfill docs clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -33,6 +33,9 @@ typecheck: ## mypy only
 
 test: ## Run the test suite (never touches the network)
 	$(UV) run pytest
+
+test-science: ## Enforce the coverage floor on science/, the pure-function core
+	$(UV) run pytest tests/unit --cov=src/starlink_drag/science 		--cov-report=term-missing --cov-fail-under=90
 
 test-cov: ## Run tests with a coverage report for science/
 	$(UV) run pytest --cov --cov-report=term-missing

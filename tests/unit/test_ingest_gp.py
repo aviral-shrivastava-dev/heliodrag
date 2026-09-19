@@ -273,3 +273,61 @@ def test_report_describes_itself() -> None:
     assert "1,234 rows" in text
     assert "90 partitions" in text
     assert "FAILED" in text
+
+
+# -- silently empty windows ------------------------------------------------
+
+
+class EmptySpaceTrack(FakeSpaceTrack):
+    """Returns HTTP-200-with-no-rows, the way a throttled Space-Track does."""
+
+    def __init__(self, empty_after: int) -> None:
+        super().__init__()
+        self.empty_after = empty_after
+
+    def gp_history(
+        self, norad_ids: Sequence[int], start: dt.date, end: dt.date
+    ) -> list[dict[str, Any]]:
+        rows = super().gp_history(norad_ids, start, end)
+        return [] if len(self.calls) > self.empty_after else rows
+
+
+def test_a_window_that_returns_nothing_is_recorded_not_shrugged_at(
+    tmp_path: Any, landings: list[pl.DataFrame]
+) -> None:
+    """Space-Track answers a throttled request with 200 and an empty array.
+
+    A real backfill lost the last quarter of 2020 this way while reporting
+    success, so an empty window is now recorded rather than skipped silently.
+    """
+    report = ingest_gp(
+        _settings(tmp_path, batch_size=2),
+        dt.date(2024, 1, 1),
+        dt.date(2024, 1, 7),
+        [1, 2],
+        window_days=3,
+        client=EmptySpaceTrack(empty_after=1),
+    )
+
+    assert report.empty_windows == ("2024-01-04..2024-01-07",)
+    assert report.rows_written > 0, "the first window still landed"
+    assert report.has_suspicious_gap, "an empty window beside a full one is a gap"
+
+
+def test_an_entirely_empty_run_is_not_called_suspicious(
+    tmp_path: Any, landings: list[pl.DataFrame]
+) -> None:
+    """A backfill starting before the first launch is legitimately empty, and
+    must not be failed for it."""
+    report = ingest_gp(
+        _settings(tmp_path, batch_size=2),
+        dt.date(2024, 1, 1),
+        dt.date(2024, 1, 4),
+        [1, 2],
+        window_days=3,
+        client=EmptySpaceTrack(empty_after=0),
+    )
+
+    assert report.rows_written == 0
+    assert report.empty_windows
+    assert not report.has_suspicious_gap

@@ -35,5 +35,14 @@ seeds:
   starlink_drag:
     +tags: ["silver"]
 
+vars:
+  # Volume expectations, defaulted to production scale. The seeded-fixture
+  # integration test overrides them, so the same models and the same tests run
+  # against a handful of rows without either weakening the real thresholds or
+  # maintaining a second copy of the suite.
+  min_satellites: 10000
+  max_satellites: 100000
+  min_daily_decay_rows: 1000
+
 flags:
   send_anonymous_usage_stats: false

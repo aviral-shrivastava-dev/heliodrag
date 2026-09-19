@@ -9,11 +9,11 @@ This repository is the pipeline that answers it: a partitioned, idempotent,
 reproducible path from two public APIs to a set of gold marts, a Streamlit
 explorer, and a regression that controls for the obvious confounders.
 
-> **Status: Phase 3 (orchestration).** The pipeline runs as 20 partitioned
-> Dagster assets with 80 checks, rebuildable from 2020 to today with one
-> command. A full year of 2024 is landed and modelled: 5.96M element sets into
-> 2.19M satellite-days. Serving and the analysis are not yet built. See
-> [the build order](#build-order).
+> **Status: Phase 4 (hardening).** 20 partitioned Dagster assets, 80 checks,
+> 232 tests, `science/` at 100% coverage with the floor enforced, and a real
+> `dbt build` against seeded fixtures in the suite. A full year of 2024 is
+> landed and modelled: 5.96M element sets into 2.19M satellite-days. Serving and
+> the analysis are not yet built. See [the build order](#build-order).
 
 ## Quick start
 
@@ -37,7 +37,7 @@ running any ingestion. OMNI needs no authentication.
 | --- | --- | --- |
 | Packaging | uv, `src/` layout | Reproducible lockfile; fast enough to run on every CI push. See [ADR-0001](docs/adr/0001-packaging-with-uv.md). |
 | Ingestion | dlt | Incremental loading with state, so a resumed backfill does not re-fetch. |
-| Lake | Iceberg on Parquet (MinIO / Cloudflare R2) | Append-only bronze with snapshot isolation and partition-level replacement. |
+| Lake | Iceberg on Parquet (MinIO / Cloudflare R2) | Append-only bronze; duplicates collapse in the intermediate layer. Partition replacement was tried and abandoned on measurement — see [ADR-0005](docs/adr/0005-bronze-appends-rather-than-replaces.md). |
 | Engine | DuckDB + Polars | The dataset fits on one machine; a cluster would be cost and complexity with no benefit. |
 | Transformation | dbt-core + dbt-duckdb | Tested, documented, versioned SQL with a lineage graph a reviewer can read. |
 | Orchestration | Dagster | Partitioned assets make backfill and per-partition idempotency the default. See [ADR-0002](docs/adr/0002-dagster-over-airflow.md). |
@@ -78,9 +78,9 @@ NASA OMNI data, obtained via the SPDF HAPI server, is public domain.
 | 0 | Scaffold: packaging, tooling, CI, ADRs | done |
 | 1 | Ingestion: Space-Track and HAPI clients, dlt into bronze Iceberg | done |
 | 2 | Transformation: dbt staging, intermediate, marts | done |
-| 3 | Orchestration: partitioned Dagster assets, asset checks, CLI parity | **done** |
-| 4 | Hardening: coverage, integration tests, nightly CI, runbook, Terraform | next |
-| 5 | Serving: Streamlit explorer, full README, published dbt docs | |
+| 3 | Orchestration: partitioned Dagster assets, asset checks, CLI parity | done |
+| 4 | Hardening: coverage, integration tests, nightly CI, runbook, Terraform | **done** |
+| 5 | Serving: Streamlit explorer, full README, published dbt docs | next |
 | 6 | Streaming (optional): Redpanda drag nowcast | |
 | 7 | Analysis: per-generation regression with bootstrap CIs, figures | |
 
@@ -100,6 +100,9 @@ not fewer facts.
 | Phase 1 — ingestion | [phase-1.md](docs/phases/phase-1.md) | [phase-1-plain.md](docs/phases/phase-1-plain.md) |
 | Phase 2 — transformation | [phase-2.md](docs/phases/phase-2.md) | [phase-2-plain.md](docs/phases/phase-2-plain.md) |
 | Phase 3 — orchestration | [phase-3.md](docs/phases/phase-3.md) | [phase-3-plain.md](docs/phases/phase-3-plain.md) |
+| Phase 4 — hardening | [phase-4.md](docs/phases/phase-4.md) | [phase-4-plain.md](docs/phases/phase-4-plain.md) |
 
 - [docs/phases/](docs/phases/) — index, and what each phase document covers
 - [docs/adr/](docs/adr/) — architecture decision records, one per decision
+- [docs/runbook.md](docs/runbook.md) — what to do when it breaks, written from real incidents
+- [docs/data_dictionary.md](docs/data_dictionary.md) — generated from dbt's manifest

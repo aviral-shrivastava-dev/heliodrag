@@ -216,81 +216,57 @@ def seed_generations_command(
     typer.echo(report.describe())
 
 
-DAGSTER_MODULE = "starlink_drag.definitions"
-
-
 @app.command("backfill")
-def backfill_everything_command(
+def orchestrated_backfill_command(
     start: Annotated[
         str, typer.Option(help="First partition, inclusive (YYYY-MM-DD).")
     ] = "2020-01-01",
     end: Annotated[
         str | None,
-        typer.Option(help="Last partition, inclusive. Defaults to yesterday."),
+        typer.Option(help="Last partition, inclusive. Defaults to the newest one."),
     ] = None,
 ) -> None:
     """Run the whole pipeline over a partition range, through Dagster.
 
     One command for the full 2020-to-now backfill. The ingestion assets carry
-    BackfillPolicy.single_run, so the range is a handful of wide requests rather
-    than one run per day -- which at Space-Track's rate limit would take a week
-    and a half.
-
-    It issues three Dagster runs rather than one, because `--partition-range`
-    refuses a selection containing anything unpartitioned, and the catalogue
-    snapshot and everything downstream of bronze are unpartitioned by design:
-
-      1. the catalogue, which supplies the object list the elements need
-      2. the partitioned sources, over the whole range in a single run
-      3. the views, then dbt
+    BackfillPolicy.single_run, so the range is a handful of wide requests
+    rather than one run per day -- which at Space-Track's rate limit would take
+    a week and a half.
 
     `ingest backfill` is the same work without Dagster, for a plain scheduler.
     """
-    last = end or (dt.date.today() - dt.timedelta(days=1)).isoformat()
-    partition_range = f"{start}...{last}"
+    from starlink_drag import backfill
 
-    steps: list[tuple[str, str, str | None]] = [
-        ("catalogue", "bronze_satcat", None),
-        ("sources", "bronze_omni,bronze_gp_history", partition_range),
-        ("views and models", "group:warehouse,group:silver,group:gold", None),
-    ]
-
-    for label, selection, span in steps:
-        typer.echo("")
-        typer.echo(f"[{label}] {selection}" + (f" over {span}" if span else ""))
-        code = _materialize(selection, span)
-        if code != 0:
-            typer.echo(f"[{label}] failed with exit code {code}", err=True)
-            raise typer.Exit(code=code)
-
-    typer.echo("")
-    typer.echo(f"backfill complete: {partition_range}")
+    code = backfill.run(start, end, report=typer.echo)
+    if code != 0:
+        raise typer.Exit(code=code)
 
 
-def _materialize(selection: str, partition_range: str | None) -> int:
-    """Invoke `dagster asset materialize` for one selection.
+@app.command("check-upstream")
+def check_upstream_command(
+    source: Annotated[
+        str, typer.Option(help="Which API to check: omni, spacetrack, or all.")
+    ] = "all",
+) -> None:
+    """Ask the upstream APIs whether they still have the shape we parse.
 
-    The selection is never "*": a bare asterisk is expanded by the shell into
-    the working directory's file list before Dagster sees it.
+    Schema drift is the failure this project is least able to notice on its
+    own: nothing crashes, the casts just start producing nulls and every
+    downstream number is computed from emptier data while the pipeline stays
+    green. Run nightly.
     """
-    import subprocess
-    import sys
+    from starlink_drag.contracts import check
 
-    command = [
-        sys.executable,
-        "-m",
-        "dagster",
-        "asset",
-        "materialize",
-        "-m",
-        DAGSTER_MODULE,
-        "--select",
-        selection,
-    ]
-    if partition_range:
-        command += ["--partition-range", partition_range]
+    try:
+        results = check(get_settings(), source)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
 
-    return subprocess.run(command, check=False).returncode
+    for result in results:
+        typer.echo(result.describe())
+
+    if any(not result.ok for result in results):
+        raise typer.Exit(code=1)
 
 
 @app.command("data-dictionary")

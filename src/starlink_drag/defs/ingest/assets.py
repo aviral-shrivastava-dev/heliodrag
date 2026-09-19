@@ -143,6 +143,17 @@ def bronze_gp_history(
             "re-run this partition range to fill the gaps"
         )
 
+    if report.has_suspicious_gap:
+        # Not a failure Space-Track reports: a throttled request comes back as
+        # HTTP 200 with an empty array. Failing here turns a silent hole into a
+        # retry, which the asset's RetryPolicy then handles.
+        raise RuntimeError(
+            f"{len(report.empty_windows)} window(s) returned no rows while others "
+            f"returned {report.rows_written:,}: {', '.join(report.empty_windows)}. "
+            "This is usually Space-Track throttling, which it reports as an "
+            "empty success. Re-run the range."
+        )
+
     return dg.MaterializeResult(
         metadata={
             "rows": report.rows_written,

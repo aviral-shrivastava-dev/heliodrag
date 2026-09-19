@@ -1,0 +1,107 @@
+name: nightly
+
+# Two jobs with different jobs to do.
+#
+# `regression` is self-contained: it re-runs the whole suite plus a real
+# `dbt build` against seeded fixtures, with no credentials and no network. It
+# exists to catch drift that a quiet repository still suffers -- a transitive
+# dependency changing behaviour under the same lockfile constraints, a DuckDB
+# or dbt release altering a result.
+#
+# `upstream_contract` is the one that needs the network. It asks Space-Track
+# and NASA whether their responses still have the shape the parsers expect.
+# Schema drift upstream is the failure this project is least able to detect on
+# its own, because everything downstream keeps working on stale data until
+# somebody notices the numbers stopped moving.
+#
+# Neither job ingests into a lake. A GitHub runner has no persistent storage,
+# so a scheduled ingest only makes sense once the lake is on R2 -- see
+# infra/terraform. Until then this workflow deliberately does less rather than
+# pretending to keep a warehouse warm.
+
+on:
+  schedule:
+    # 04:00 UTC. Space-Track publishes on a lag, so an earlier run would chase
+    # elements that have not been posted yet.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  FORCE_COLOR: "1"
+
+jobs:
+  regression:
+    name: full suite and a real dbt build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.16"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+
+      - name: Lint and typecheck
+        run: make lint
+
+      - name: Enforce the coverage floor on science/
+        run: make test-science
+
+      - name: Full suite, including dbt build against seeded fixtures
+        run: make test
+
+      - name: Refuse raw data in the repository
+        run: |
+          if git ls-files --error-unmatch data 2>/dev/null; then
+            echo "::error::files under data/ are tracked; they must not be"
+            exit 1
+          fi
+
+  upstream_contract:
+    name: do the APIs still look like we think
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Never fails the workflow on a transient outage; it reports.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.16"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+
+      - name: Check NASA OMNI still returns the parameters we parse
+        run: uv run starlink-drag check-upstream --source omni
+
+      - name: Check Space-Track still returns the fields we parse
+        # Skips cleanly rather than failing when the fork or the repository has
+        # no credentials configured.
+        env:
+          SPACETRACK_IDENTITY: ${{ secrets.SPACETRACK_IDENTITY }}
+          SPACETRACK_PASSWORD: ${{ secrets.SPACETRACK_PASSWORD }}
+        run: uv run starlink-drag check-upstream --source spacetrack

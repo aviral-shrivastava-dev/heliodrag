@@ -53,6 +53,23 @@ class GpIngestReport:
     rows_quarantined: int
     partitions: int
     chunks_failed: int = 0
+    empty_windows: tuple[str, ...] = ()
+
+    @property
+    def has_suspicious_gap(self) -> bool:
+        """A window returned nothing while other windows returned plenty.
+
+        Space-Track answers a throttled request with HTTP 200 and an empty JSON
+        array -- not an error, not a 429. Without this the run reports a cheerful
+        "0 rows" and moves on, leaving a hole nothing downstream can distinguish
+        from a genuinely quiet quarter. That is exactly how a real backfill lost
+        the last quarter of 2020 while reporting success.
+
+        An empty window is only suspicious relative to a non-empty one. A
+        backfill that starts before the first launch has legitimately empty
+        windows, and those must not fail.
+        """
+        return bool(self.empty_windows) and self.rows_written > 0
 
     def describe(self) -> str:
         text = (
@@ -63,6 +80,8 @@ class GpIngestReport:
             text += f", {self.rows_quarantined:,} quarantined"
         if self.chunks_failed:
             text += f", {self.chunks_failed} chunk(s) FAILED"
+        if self.empty_windows:
+            text += f", {len(self.empty_windows)} EMPTY window(s): {', '.join(self.empty_windows)}"
         return text
 
 
@@ -103,6 +122,7 @@ def ingest_gp(
 
     requests = written = quarantined = failed = 0
     seen_partitions: set[str] = set()
+    empty_windows: list[str] = []
 
     try:
         for window_start, window_end in windows(start, end, window_days):
@@ -125,6 +145,7 @@ def ingest_gp(
                 collected.append(gp.to_frame(rows))
 
             if not collected:
+                empty_windows.append(label)
                 continue
 
             # One write per window, not one per batch. Writing costs roughly a
@@ -134,6 +155,16 @@ def ingest_gp(
             # writes instead of 366 -- hours instead of minutes. Measured, not
             # guessed; the numbers are in docs/phases/phase-1.md.
             combined = pl.concat(collected).sort(["norad_id", "epoch", "gp_id"])
+
+            # Every request in the window succeeded and returned nothing.
+            # Space-Track answers a throttled request with HTTP 200 and an
+            # empty array, so this is recorded rather than shrugged at.
+            if combined.is_empty():
+                empty_windows.append(label)
+                if on_progress:
+                    on_progress(f"  {label} -> EMPTY: {requests} requests, no rows")
+                continue
+
             outcome = land(combined, GP_SPEC, settings, schema=gp.schema, source=gp.SOURCE)
 
             written += outcome.rows_written
@@ -154,4 +185,5 @@ def ingest_gp(
         rows_quarantined=quarantined,
         partitions=len(seen_partitions),
         chunks_failed=failed,
+        empty_windows=tuple(empty_windows),
     )

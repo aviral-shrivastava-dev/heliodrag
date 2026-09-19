@@ -60,8 +60,8 @@ models:
         description: Launch to decay, or to today if still on orbit.
     data_tests:
       - dbt_expectations.expect_table_row_count_to_be_between:
-          min_value: 10000
-          max_value: 100000
+          min_value: "{{ var('min_satellites') }}"
+          max_value: "{{ var('max_satellites') }}"
 
   - name: dim_generation
     description: >
@@ -168,7 +168,7 @@ models:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [norad_id, epoch_date]
       - dbt_expectations.expect_table_row_count_to_be_between:
-          min_value: 1000
+          min_value: "{{ var('min_daily_decay_rows') }}"
 
   - name: fct_storm_epoch
     description: >

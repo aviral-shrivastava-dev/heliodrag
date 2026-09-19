@@ -203,6 +203,14 @@ def test_non_positive_mean_motion_is_rejected(bad: float) -> None:
         orbital.orbital_period_minutes(bad)
 
 
+@pytest.mark.parametrize("bad", [0.0, -1.0, -6378.137])
+def test_a_semi_major_axis_inside_the_earth_is_rejected(bad: float) -> None:
+    """The inverse conversion has no meaning for a non-positive radius, and
+    silently returning a complex or infinite value would propagate."""
+    with pytest.raises(ValueError):
+        orbital.mean_motion_from_semi_major_axis(bad)
+
+
 def test_elapsed_time_must_be_positive() -> None:
     with pytest.raises(ValueError):
         orbital.mean_motion_rate(15.0, 15.1, days_elapsed=0.0)

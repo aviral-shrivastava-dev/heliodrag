@@ -104,3 +104,10 @@ filterwarnings = ["ignore::DeprecationWarning"]
 [tool.coverage.run]
 source = ["src/starlink_drag"]
 branch = true
+
+[tool.coverage.report]
+# The brief requires science/ above 90%. `make test-science` enforces it, and
+# CI runs that, so the number cannot quietly drift back down. Only science/ is
+# gated: it holds the pure functions every result depends on, and it is the one
+# package that can be covered exhaustively without a network or a warehouse.
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
