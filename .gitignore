@@ -30,8 +30,11 @@ data/dagster_dev.log
 transform/target/
 transform/dbt_packages/
 transform/logs/
-transform/package-lock.yml
 transform/.user.yml
+# transform/package-lock.yml is deliberately NOT ignored: it pins the exact dbt
+# package versions, for the same reason uv.lock is committed. Without it,
+# `dbt deps` resolves afresh within the ranges in packages.yml and two machines
+# can build the same models against different macros.
 
 # dlt
 .dlt/secrets.toml

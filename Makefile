@@ -17,6 +17,7 @@ help: ## Show this help
 setup: ## Create the venv, install everything, install the git hooks
 	$(UV) sync --all-groups
 	$(UV) run pre-commit install
+	$(DBT) deps $(DBT_FLAGS)
 	@test -f .env || (cp .env.example .env && echo "created .env -- fill it in")
 
 lint: ## ruff check + format check + mypy
@@ -32,10 +33,14 @@ typecheck: ## mypy only
 	$(UV) run mypy
 
 manifest: ## Build transform/target/manifest.json, which Dagster needs to load
-	@# dagster-dbt reads the manifest at import time, and it is generated rather
-	@# than committed. Without it, importing starlink_drag.definitions raises
-	@# DagsterDbtManifestNotFoundError -- which is how CI failed the first time
-	@# this repository was pushed, while every local run passed.
+	@# Two pieces of generated state that exist on a developer's machine and on
+	@# no clean one, both of which failed CI on the first pushes:
+	@#   dbt_packages/  -- dbt refuses to parse without its packages installed
+	@#   target/manifest.json -- dagster-dbt reads it when definitions import,
+	@#                           raising DagsterDbtManifestNotFoundError if absent
+	@# deps is skipped when the packages are already there, so the ordinary
+	@# `make test` stays offline; only a fresh clone reaches the network.
+	@test -d $(DBT_DIR)/dbt_packages || $(DBT) deps $(DBT_FLAGS)
 	$(DBT) parse $(DBT_FLAGS)
 
 test: manifest ## Run the test suite (never touches the network)
