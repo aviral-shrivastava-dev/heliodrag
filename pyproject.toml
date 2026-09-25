@@ -35,8 +35,13 @@ dependencies = [
 starlink-drag = "starlink_drag.cli:app"
 
 [dependency-groups]
+# Serving the Dagster UI is a deployment concern, not a development one: the
+# container needs it and pytest, so keeping it in `dev` forced the image to
+# choose between shipping the test suite and having no webserver.
+serve = ["dagster-webserver>=1.9"]
+
 dev = [
-    "dagster-webserver>=1.9",
+    { include-group = "serve" },
     "mypy>=1.13",
     "pre-commit>=4.0",
     "pytest>=8.3",

@@ -2341,6 +2341,9 @@ dev = [
     { name = "respx" },
     { name = "ruff" },
 ]
+serve = [
+    { name = "dagster-webserver" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -2371,6 +2374,7 @@ dev = [
     { name = "respx", specifier = ">=0.22" },
     { name = "ruff", specifier = ">=0.8" },
 ]
+serve = [{ name = "dagster-webserver", specifier = ">=1.9" }]
 
 [[package]]
 name = "streamlit"

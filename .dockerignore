@@ -1,0 +1,23 @@
+# The build context is the repository root, so without this every `docker build`
+# ships the whole lake to the daemon -- gigabytes of Space-Track data that is
+# not redistributable and has no business inside an image.
+data/
+.venv/
+.git/
+.dagster/
+.tmp_dagster_home_*/
+
+# Generated inside the image instead.
+transform/target/
+transform/dbt_packages/
+transform/logs/
+
+# Noise.
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+analysis/figures/

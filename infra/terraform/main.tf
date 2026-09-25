@@ -33,8 +33,10 @@ resource "cloudflare_r2_bucket_lifecycle" "lake" {
       delete_objects_transition = {
         condition = {
           type = "Age"
-          # Provider takes seconds.
-          maxAge = var.superseded_retention_days * 24 * 60 * 60
+          # Seconds. The attribute is max_age, not maxAge: the first draft of
+          # this file used the camelCase form from R2's REST API, and only
+          # `terraform validate` against the real provider schema caught it.
+          max_age = var.superseded_retention_days * 24 * 60 * 60
         }
       }
     },
@@ -42,10 +44,16 @@ resource "cloudflare_r2_bucket_lifecycle" "lake" {
       id      = "abandon-incomplete-uploads"
       enabled = true
 
+      # Every rule requires a prefix. Empty means the whole bucket, which is
+      # right here: a killed write can leave parts under any key.
+      conditions = {
+        prefix = ""
+      }
+
       abort_multipart_uploads_transition = {
         condition = {
-          type   = "Age"
-          maxAge = var.abort_incomplete_upload_days * 24 * 60 * 60
+          type    = "Age"
+          max_age = var.abort_incomplete_upload_days * 24 * 60 * 60
         }
       }
     },

@@ -13,7 +13,9 @@ name: starlink-drag-atlas
 
 services:
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    # quay.io, not Docker Hub: MinIO no longer publishes minio/minio there,
+    # and pulling it fails with "repository does not exist".
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${LAKE_ACCESS_KEY_ID:-minioadmin}
@@ -34,7 +36,7 @@ services:
   # one-shot container rather than an entrypoint script, so a failure to create
   # the bucket is visible as a failed container instead of a silent warning.
   minio-init:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    image: quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z
     depends_on:
       minio:
         condition: service_healthy

@@ -15,15 +15,18 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /opt/atlas
 
 # Dependency layer: changes only when the lockfile does.
-COPY pyproject.toml uv.lock README.md ./
+# LICENSE is required at build time, not merely shipped: pyproject.toml
+# declares `license = { file = "LICENSE" }`, and hatchling fails the project
+# build without it.
+COPY pyproject.toml uv.lock README.md LICENSE ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev --group serve
 
 # Project layer.
 COPY src/ ./src/
 COPY transform/ ./transform/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --group serve
 
 RUN mkdir -p "$DAGSTER_HOME" && printf 'telemetry:\n  enabled: false\n' > "$DAGSTER_HOME/dagster.yaml"
 
