@@ -165,23 +165,55 @@ It opens with the single most useful fact: **re-running is almost always safe.**
 | Container setup file | valid, 4 pieces |
 | The empty-stretch alarm | two tests: catches a real gap, ignores a genuine one |
 
-## What I could *not* check
+## What I could not check at first, and what happened when I did
 
-Three things, and I would rather say so than let green ticks imply more than was
-done.
+When this phase was built, three things could not be tried on this machine, and
+the first version of this page said so. All three have since been tried, and
+trying them turned up **nine more mistakes** that just reading the files had
+missed.
 
-**The nightly check has never actually run.** Its goal is "runs by itself for a
-week without needing a human", which needs a week and a connection to GitHub —
-and this project still has neither. Everything it runs has been verified by
-hand, but nobody can say it is passing. That gap has been open since Phase 0.
+**The nightly check now runs, and ran by itself for six days in a row.** The
+project was put on GitHub on 19 September. The automatic checks failed twice at
+first, because they assumed two files existed that only ever existed on my
+computer. Once that was fixed, the nightly check passed every night from 20 to
+25 September without anyone touching it.
 
-**The cloud storage setup has never been checked by its own tool.** That tool is
-not installed here, so the configuration has not been syntax-checked, let alone
-run. Treat it as a first draft.
+But part of it had been quietly doing nothing. The step that asks Space-Track
+"do you still send data in the shape we expect?" needs a password, and GitHub
+did not have one — so every night it said "skipping" and moved on, and the
+overall result still showed green. When the password was added, its very first
+real run failed.
 
-**The container setup was checked but never started.** The file is valid and all
-four pieces resolve, but the container system is not running on this machine, so
-nothing was ever launched. The image-building step especially is unproven.
+The reason was almost funny. To ask Space-Track about its data, the check always
+asked about one particular satellite, STARLINK-1007. That satellite **fell out of
+the sky and burned up in October 2024**, two years before the check was written.
+A satellite that no longer exists has no new data, so the check could never have
+passed. It now picks five satellites that are still up there, fresh from the
+catalogue every time, and it passes.
+
+The lesson: a check that skips looks exactly like a check that passes, unless
+somebody reads what it actually said.
+
+**The cloud storage setup has now been checked by its own tool,** and the tool
+found two mistakes: one rule was missing a required part, and one setting was
+spelled the way a different Cloudflare tool spells it. Both are fixed.
+
+**The container setup has now been started, and it works,** after four fixes:
+one of the programs had moved to a different download site; a file the build
+needed was not being copied in; the web page part was listed as a
+developer-only tool, so it was left out; and — the important one — every build
+was copying the entire 5.8 GB data folder into the container system, including
+data that is not allowed to be shared.
+
+## What still has not been checked
+
+**The cloud storage has never actually been created.** The setup is now
+correct on paper, but creating it for real needs a Cloudflare account, which
+this project does not have yet.
+
+**The scheduler inside the containers has not been seen doing its job.** It
+starts and stays running, but nobody has yet watched it trigger the daily run,
+and it logged one warning that has not been looked into.
 
 ## A smaller bug, worth mentioning
 

@@ -2,8 +2,11 @@
 
 Plain-language version: [phase-4-plain.md](phase-4-plain.md).
 
-**Status:** complete, 2026-09-19, with two acceptance items that cannot be
-verified here — see [What could not be verified](#what-could-not-be-verified).
+**Status:** complete, 2026-09-19. What could not be verified then was verified
+on 2026-09-25, once the repository was on GitHub and Terraform and Docker were
+installed — see [Verified after the fact](#verified-after-the-fact). Doing so
+found nine more defects. Two things remain unverified — see
+[Still not verified](#still-not-verified).
 
 ## What this phase is for
 
@@ -146,8 +149,9 @@ both speak S3, so only the endpoint and credentials change between local and
 production, which is what `LAKE_BACKEND` exists for.
 
 The daemon is a separate service on purpose: schedules and the concurrency key
-live there, not in the webserver. Running it is what closes the Phase 3 gap
-where the daily schedule had never fired.
+live there, not in the webserver. Running it is what would close the Phase 3 gap
+where the daily schedule had never fired. It has been started, but a schedule
+tick has not yet been observed — see [Still not verified](#still-not-verified).
 
 ## The runbook
 
@@ -172,26 +176,86 @@ bronze appends, so re-running is almost always safe.
 | `docker compose config` | valid, 4 services |
 | Empty-window guard | two tests: gap detected, legitimate emptiness not |
 
-## What could not be verified
+## Verified after the fact
 
-**The nightly workflow has never run.** Its acceptance is "runs unattended for a
-week without manual fixes", which needs a week and a GitHub remote — and this
-repository still has neither. The YAML is valid and every command it invokes is
-verified locally, but nobody can yet say it is green. This has been open since
-Phase 0.
+When this phase was built, three things could not be verified on this machine:
+the nightly workflow (no GitHub remote), Terraform (not installed) and
+docker-compose (no Docker daemon). The first version of this document said so.
+All three have since been run, and running them found nine defects that no
+syntax check could.
 
-**Terraform is unvalidated.** `terraform` is not installed on this machine, so
-the configuration has not been through `init`, `validate`, `fmt` or `plan`. It
-is written against the Cloudflare provider's v5 schema and should be treated as
-a first draft until someone runs `terraform plan` against a real account.
+**The nightly workflow ran unattended for six days.** The repository went to
+GitHub on 2026-09-19. CI failed twice first, on two assumptions that held only
+on this machine: the dbt manifest and the dbt packages both existed locally and
+nowhere else. Once those were fixed, every scheduled nightly run from 2026-09-20
+to 2026-09-25 passed — six in a row, on one unchanged commit, with no
+intervention. They start around 09:00 UTC rather than the 04:00 in the cron,
+because GitHub delays scheduled workflows under load.
 
-**docker-compose was validated but not run.** `docker compose config` accepts it
-and resolves all four services, but the Docker daemon is not running on this
-machine, so no container was ever started. The image build in particular — a
-full `uv sync` inside `python:3.12-slim` — is unproven.
+That record covered less than it appeared to. **The Space-Track contract check
+was skipping every night**, because the repository had no Space-Track secrets
+and the check is built to skip rather than fail without them. When the secrets
+were added on 2026-09-25, its first real run failed:
 
-I would rather say that plainly than let three green ticks imply more than was
-done.
+```
+DRIFT  spacetrack: no elements for 44713 in the last 7 days
+```
+
+That was not drift. The check probed one hard-coded satellite, STARLINK-1007,
+which re-entered on 2024-10-02 — so it could never have passed. It now picks
+five live satellites from the catalogue on every run (see
+[Schema drift](#schema-drift-the-other-silent-failure)), and its next run
+passed:
+
+```
+ok    spacetrack: 72 element sets from 5 satellites, all 33 gp fields and 18 satcat fields present
+```
+
+The lesson generalises: a check that skips cleanly is indistinguishable from
+one that passes, unless someone reads the log.
+
+**Terraform validates.** `terraform validate` against the real Cloudflare v5
+provider schema rejected the lifecycle rules twice over. Every rule requires a
+`conditions` block with a prefix, and the abort-uploads rule had none. And the
+age attribute is `max_age`, not the camelCase `maxAge` of R2's REST API — found
+by reading the provider schema, since `validate` stops at the first error. Both
+are fixed; `fmt`, `init` and `validate` pass. The committed
+`.terraform.lock.hcl` records provider checksums for Linux, macOS and Windows on
+amd64 and arm64, because `init` records only the platform it runs on.
+
+**docker-compose runs.** Starting it found four defects:
+
+- MinIO no longer publishes `minio/minio` on Docker Hub; both images now come
+  from `quay.io`, MinIO's own registry.
+- The image build failed with `License file does not exist: LICENSE`: hatchling
+  needs the file `pyproject.toml` declares, and the Dockerfile did not copy it.
+- The webserver would not start. `dagster-webserver` was in the `dev` group and
+  the image installs `--no-dev`, so it moved to a `serve` group that `dev`
+  includes and the image installs explicitly.
+- There was no `.dockerignore`, so every build sent `data/` — 5.8 GB of
+  Space-Track data that must not be redistributed — to the Docker daemon.
+
+After the fixes: MinIO healthy, bucket created, image built, webserver answering
+HTTP 200 on port 3000, daemon up.
+
+| Check | Result |
+| --- | --- |
+| Scheduled nightly runs | **6 of 6 green**, 2026-09-20 to 2026-09-25, unattended |
+| `check-upstream --source spacetrack` | skipped until 2026-09-25; failed on a dead probe; fixed; **passes** |
+| `terraform fmt`, `init`, `validate` | **pass**, after two schema fixes |
+| `docker compose up` | **runs**, after four fixes |
+| `pytest` | **239 passed**, including the tests for the probe fix |
+
+## Still not verified
+
+**`terraform plan` and `apply`** need a Cloudflare account and API token, so
+the configuration has been checked against the provider's schema but never
+against a real account.
+
+**The Dagster daemon has not been seen firing a schedule.** It starts and stays
+up, but no scheduled tick was observed, and its log showed a code-server
+warning (`No heartbeat received in 20 seconds, shutting down`) that has not been
+investigated.
 
 ## A bug found while re-running the backfill
 
