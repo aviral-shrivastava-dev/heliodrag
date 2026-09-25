@@ -130,6 +130,18 @@ starlink-drag check-upstream --source omni
 It compares the live response's field names against what the parsers read, and
 exits non-zero on a mismatch. The nightly workflow runs it.
 
+**If it reports `EMPTY` rather than `DRIFT`:** Space-Track answered, but with
+nothing, so no shape was checked. That is not drift. It is most often
+throttling — see [Rate-limit exhaustion](#rate-limit-exhaustion) — so wait an
+hour and run it again before changing anything.
+
+The Space-Track check probes five satellites chosen from the live catalogue on
+every run: the newest still on orbit and launched over a month ago. It used to
+probe one hard-coded satellite, STARLINK-1007, which re-entered on 2024-10-02.
+Every run then reported drift that was not there, because a satellite that no
+longer exists has no elements. Never hard-code a probe again: any fixed
+satellite eventually does the same.
+
 **If it reports drift:**
 
 1. `starlink-drag check-upstream` names the missing fields.

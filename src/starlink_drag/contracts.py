@@ -10,14 +10,16 @@ So this checks the *shape* of a live response against what the code reads,
 rather than checking that a request succeeds. It is run nightly, and is the
 thing the runbook's "schema drift" entry points at.
 
-It fetches the smallest useful response -- one satellite over one day -- so a
-nightly check costs almost nothing against the rate limit.
+It costs two Space-Track requests: the Starlink catalogue, and one week of
+elements for a handful of satellites chosen from it.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from starlink_drag.clients.hapi import OMNI_PARAMETERS, HapiClient
 from starlink_drag.clients.spacetrack import SpaceTrackClient
@@ -25,10 +27,17 @@ from starlink_drag.config import Settings
 from starlink_drag.schemas import gp as gp_schema
 from starlink_drag.schemas import satcat as satcat_schema
 
-PROBE_NORAD_ID = 44713
-"""STARLINK-1007, from the first operational launch in November 2019. Chosen
-because it is long-lived and certain to have history; any catalogued object
-would do."""
+PROBE_COUNT = 5
+"""How many satellites to ask for. More than one, so a single satellite being
+deorbited or losing tracking cannot fail the check on its own."""
+
+PROBE_MIN_AGE_DAYS = 30
+"""Probes must have launched at least this long ago. The newest few satellites
+usually share one launch, and a launch from the last few days may not have a
+week of elements yet -- so without this floor they would all come back empty
+together."""
+
+LOOKBACK_DAYS = 7
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,12 +49,18 @@ class ContractResult:
     detail: str
     missing: tuple[str, ...] = ()
     skipped: bool = False
+    empty: bool = False
+    """The source answered with nothing, so the shape could not be checked.
+    Not a pass -- but not evidence of drift either, because an empty 200 is
+    also how Space-Track answers when it is throttling."""
     observed: dict[str, str] = field(default_factory=dict)
 
     def describe(self) -> str:
         if self.skipped:
             return f"SKIP  {self.source}: {self.detail}"
         status = "ok  " if self.ok else "DRIFT"
+        if self.empty:
+            status = "EMPTY"
         line = f"{status}  {self.source}: {self.detail}"
         if self.missing:
             line += f"\n      missing: {', '.join(self.missing)}"
@@ -79,6 +94,29 @@ def check_omni(settings: Settings) -> ContractResult:
     )
 
 
+def choose_probes(
+    catalogue: Sequence[dict[str, Any]], today: dt.date, count: int = PROBE_COUNT
+) -> list[int]:
+    """The newest satellites that are still on orbit and past their first month.
+
+    Chosen from the live catalogue on every run, never hard-coded. The first
+    version of this check probed STARLINK-1007, which re-entered on 2024-10-02;
+    a satellite that no longer exists has no elements, so every run reported
+    drift that was not there. Any fixed choice eventually does the same.
+
+    Newest, because a recently launched satellite is the least likely to be
+    being commanded down.
+    """
+    cutoff = (today - dt.timedelta(days=PROBE_MIN_AGE_DAYS)).isoformat()
+    on_orbit = [
+        row
+        for row in catalogue
+        if not row.get("DECAY") and row.get("LAUNCH") and str(row["LAUNCH"]) <= cutoff
+    ]
+    on_orbit.sort(key=lambda row: str(row["LAUNCH"]), reverse=True)
+    return [int(row["NORAD_CAT_ID"]) for row in on_orbit[:count]]
+
+
 def check_spacetrack(settings: Settings) -> ContractResult:
     """Does gp_history still carry the fields we parse, and satcat too?
 
@@ -93,41 +131,56 @@ def check_spacetrack(settings: Settings) -> ContractResult:
             detail="no credentials configured; nothing checked",
         )
 
-    end = dt.date.today()
-    start = end - dt.timedelta(days=7)
+    today = dt.date.today()
+    start = today - dt.timedelta(days=LOOKBACK_DAYS)
 
     with SpaceTrackClient(settings.spacetrack) as client:
-        elements = client.gp_history([PROBE_NORAD_ID], start, end)
-        catalogue = client.satcat(name_pattern="STARLINK-1007")
+        catalogue = client.satcat()
+        probes = choose_probes(catalogue, today)
+        elements = client.gp_history(probes, start, today) if probes else []
 
-    if not elements:
+    if not catalogue:
+        return _empty("the Starlink catalogue came back empty")
+
+    missing_satcat = tuple(sorted(set(satcat_schema.FIELD_MAP) - set(catalogue[0])))
+    satcat_missing = tuple(f"satcat.{name}" for name in missing_satcat)
+
+    if not probes:
+        # A catalogue with no qualifying satellite means LAUNCH or DECAY no
+        # longer mean what we read them as -- drift, not an empty answer.
         return ContractResult(
             source="spacetrack",
             ok=False,
-            detail=f"no elements for {PROBE_NORAD_ID} in the last 7 days",
+            detail="no on-orbit satellite in the catalogue qualifies as a probe",
+            missing=satcat_missing,
+        )
+
+    if not elements:
+        ids = ", ".join(str(norad_id) for norad_id in probes)
+        return _empty(
+            f"no elements in the last {LOOKBACK_DAYS} days for any of {len(probes)} "
+            f"on-orbit satellites ({ids}); throttling looks like this"
         )
 
     missing_gp = tuple(sorted(set(gp_schema.FIELD_MAP) - set(elements[0])))
-    missing_satcat: tuple[str, ...] = ()
-    if catalogue:
-        missing_satcat = tuple(sorted(set(satcat_schema.FIELD_MAP) - set(catalogue[0])))
-
-    missing = (
-        *(f"gp_history.{name}" for name in missing_gp),
-        *(f"satcat.{name}" for name in missing_satcat),
-    )
+    missing = (*(f"gp_history.{name}" for name in missing_gp), *satcat_missing)
 
     return ContractResult(
         source="spacetrack",
         ok=not missing,
         detail=(
-            f"{len(elements)} element sets, all {len(gp_schema.FIELD_MAP)} gp fields "
-            f"and {len(satcat_schema.FIELD_MAP)} satcat fields present"
+            f"{len(elements)} element sets from {len(probes)} satellites, all "
+            f"{len(gp_schema.FIELD_MAP)} gp fields and {len(satcat_schema.FIELD_MAP)} "
+            "satcat fields present"
             if not missing
             else f"{len(missing)} field(s) we parse are gone"
         ),
         missing=missing,
     )
+
+
+def _empty(detail: str) -> ContractResult:
+    return ContractResult(source="spacetrack", ok=False, empty=True, detail=detail)
 
 
 def check(settings: Settings, source: str) -> list[ContractResult]:

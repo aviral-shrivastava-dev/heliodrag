@@ -62,6 +62,15 @@ observed fill markers (a changed sentinel is how a fake 999.9 solar flux enters
 the science), and **skips cleanly without credentials** so a fork gets a skip
 rather than a red build. The nightly workflow runs it.
 
+**Corrected after the fact.** As first built, the Space-Track check probed one
+hard-coded satellite, STARLINK-1007 (NORAD 44713) — which had re-entered on
+2024-10-02, two years before the check was written. It went unnoticed because
+the repository had no Space-Track secrets, so every nightly run skipped the
+check. The first run with secrets reported `DRIFT: no elements for 44713`. It
+now picks five satellites from the live catalogue each run (the newest still on
+orbit and at least a month old), and reports an empty answer as `EMPTY`, not
+`DRIFT`, because an empty 200 is also what throttling looks like.
+
 ## Coverage
 
 `science/` is at **100%**, and the floor is enforced rather than observed:
