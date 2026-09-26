@@ -79,7 +79,8 @@ yes. Measuring it is harder than it sounds, and the pipeline is built around why
 
 The confounders are columns in the gold marts rather than filters, so the
 statistical comparison (Phase 7) can condition on them openly. The explorer
-shows the data; it does not answer the question.
+shows the data; it does not answer the question. As of September 2026 no
+published study found answers it either: [related work](docs/research/related-work.md).
 
 ## Run it locally
 
@@ -247,6 +248,19 @@ applied: that needs a Cloudflare account and token.
 - DuckDB 1.5.5 was found to build one mart from a fraction of its input inside
   `CREATE TABLE AS`. The model now avoids the pattern that triggers it, and a
   dedicated test would catch a recurrence ([runbook](docs/runbook.md#checks-that-are-failing)).
+- **Thin days are Space-Track's, not ours.** 26 of the 2,460 days since 2020
+  hold under 40% of their month's typical element sets, and two (2020-03-12,
+  2020-11-08) hold none. Re-fetching them on 2026-09-26 returned exactly the
+  element sets already landed, down to the correction IDs, so the gaps are in
+  the published history itself and no re-download can fill them.
+- **Generation labels lag launches by about two months.** GCAT, where the
+  labels come from, had its newest Starlink at 2026-07-11 when refreshed on
+  2026-09-26, so the ~450 satellites launched since are `unknown` until
+  `starlink-drag seed-generations --refresh` finds them. They are still raising
+  their orbits, which the analysis excludes anyway. Also `unknown`: four
+  satellites from the February 2022 storm launch that re-entered within days,
+  before Space-Track named them. Of that launch's 49 satellites, Space-Track
+  catalogued only 17; the rest were never tracked.
 
 **Future work**
 

@@ -117,7 +117,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 44768,S44768,Starlink 1063,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2019-11-11,
 44769,S44769,Starlink 1064,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2019-11-11,2022-02-11
 44770,S44770,Starlink 1065,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2019-11-11,2023-04-20
-44771,S44771,Starlink 1067,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2019-11-11,
+44771,S44771,Starlink 1067,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2019-11-11,2026-09-18
 44772,S44772,Starlink 1068,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2019-11-11,
 44914,S44914,Starlink 1073,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-01-07,2025-04-22
 44915,S44915,Starlink 1084,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-01-07,2025-02-14
@@ -318,7 +318,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 45376,S45376,Starlink 1304,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-03-18,
 45377,S45377,Starlink 1305,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-03-18,
 45378,S45378,Starlink 1310,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-03-18,2024-07-26
-45379,S45379,Starlink 1319,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-03-18,
+45379,S45379,Starlink 1319,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-03-18,2026-09-18
 45380,S45380,Starlink 1207,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-03-18,2025-02-11
 45381,S45381,Starlink 1258,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-03-18,2025-10-03
 45382,S45382,Starlink 1264,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-03-18,2023-12-07
@@ -637,7 +637,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 46157,S46157,Starlink 1587,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-08-18,2026-03-22
 46158,S46158,Starlink 1589,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-08-18,2024-06-24
 46159,S46159,Starlink 1595,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-08-18,2026-09-04
-46160,S46160,Starlink 1598,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-08-18,
+46160,S46160,Starlink 1598,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-08-18,2026-09-15
 46161,S46161,Starlink 1600,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-08-18,2025-06-14
 46162,S46162,Starlink 1603,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-08-18,2025-02-27
 46163,S46163,Starlink 1610,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-08-18,2025-05-08
@@ -680,7 +680,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 46350,S46350,Starlink 1617,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2024-06-07
 46351,S46351,Starlink 1646,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2026-08-10
 46352,S46352,Starlink 1653,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2026-08-19
-46353,S46353,Starlink 1656,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,
+46353,S46353,Starlink 1656,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2026-09-16
 46354,S46354,Starlink 1657,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2026-04-10
 46355,S46355,Starlink 1661,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,
 46356,S46356,Starlink 1665,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2026-06-27
@@ -702,7 +702,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 46372,S46372,Starlink 1689,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2025-09-07
 46373,S46373,Starlink 1691,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2021-08-17
 46374,S46374,Starlink 1711,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2025-02-21
-46375,S46375,Starlink 1724,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,
+46375,S46375,Starlink 1724,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2026-09-21
 46376,S46376,Starlink 1742,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2026-04-16
 46377,S46377,Starlink 1745,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2021-08-20
 46378,S46378,Starlink 1751,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-09-03,2022-02-09
@@ -807,7 +807,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 46702,S46702,Starlink 1802,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-18,
 46703,S46703,Starlink 1803,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-18,2025-04-24
 46704,S46704,Starlink 1804,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-18,2024-06-09
-46705,S46705,Starlink 1805,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-18,
+46705,S46705,Starlink 1805,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-18,2026-09-15
 46706,S46706,Starlink 1807,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-18,
 46707,S46707,Starlink 1808,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-18,2025-04-24
 46708,S46708,Starlink 1809,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-18,2022-06-05
@@ -879,7 +879,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 46783,S46783,Starlink 1851,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2024-05-20
 46784,S46784,Starlink 1882,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2026-07-06
 46785,S46785,Starlink 1883,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2025-02-21
-46786,S46786,Starlink 1893,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,
+46786,S46786,Starlink 1893,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2026-09-18
 46787,S46787,Starlink 1899,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2024-10-15
 46788,S46788,Starlink 1929,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2025-01-31
 46789,S46789,Starlink 1930,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2025-02-03
@@ -887,7 +887,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 46791,S46791,Starlink 1933,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2025-02-12
 46792,S46792,Starlink 1934,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2026-04-25
 46793,S46793,Starlink 1941,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2025-03-19
-46794,S46794,Starlink 1942,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,
+46794,S46794,Starlink 1942,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2026-09-18
 46795,S46795,Starlink 1943,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2021-12-20
 46796,S46796,Starlink 1944,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2026-07-06
 46797,S46797,Starlink 1947,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-10-24,2022-04-30
@@ -905,7 +905,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 47132,S47132,Starlink 1842,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2021-07-05
 47133,S47133,Starlink 1843,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2026-04-06
 47134,S47134,Starlink 1844,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2024-12-18
-47135,S47135,Starlink 1845,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,
+47135,S47135,Starlink 1845,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2026-09-18
 47136,S47136,Starlink 1846,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2025-02-22
 47137,S47137,Starlink 1849,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2025-06-04
 47138,S47138,Starlink 1850,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2025-03-19
@@ -941,7 +941,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 47168,S47168,Starlink 1885,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2022-08-13
 47169,S47169,Starlink 1886,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2021-10-22
 47170,S47170,Starlink 1887,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2025-01-28
-47171,S47171,Starlink 1888,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,
+47171,S47171,Starlink 1888,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2026-09-20
 47172,S47172,Starlink 1889,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2022-04-08
 47173,S47173,Starlink 1890,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2025-06-30
 47174,S47174,Starlink 1891,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2020-11-25,2025-01-09
@@ -1070,7 +1070,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 47593,S47593,Starlink 1998,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-02-04,2025-01-21
 47594,S47594,Starlink 1999,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-02-04,2024-12-17
 47595,S47595,Starlink 2000,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-02-04,2025-02-15
-47596,S47596,Starlink 2001,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-02-04,
+47596,S47596,Starlink 2001,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-02-04,2026-09-20
 47597,S47597,Starlink 2002,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-02-04,2025-03-29
 47598,S47598,Starlink 2003,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-02-04,2025-03-22
 47599,S47599,Starlink 2004,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-02-04,2024-08-28
@@ -1281,7 +1281,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 47876,S47876,Starlink 2332,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-03-14,2025-02-18
 47877,S47877,Starlink 2333,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-03-14,2025-02-26
 47878,S47878,Starlink 2335,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-03-14,2025-02-24
-47879,S47879,Starlink 2336,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-03-14,
+47879,S47879,Starlink 2336,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-03-14,2026-09-16
 47880,S47880,Starlink 2337,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-03-14,2025-02-20
 47881,S47881,Starlink 2339,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-03-14,2025-01-15
 47882,S47882,Starlink 2340,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-03-14,2025-12-13
@@ -1599,7 +1599,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 48462,S48462,Starlink 2683,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-05-09,
 48463,S48463,Starlink 2689,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-05-09,2025-01-10
 48464,S48464,Starlink 2686,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-05-09,
-48465,S48465,Starlink 2681,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-05-09,
+48465,S48465,Starlink 2681,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-05-09,2026-09-18
 48466,S48466,Starlink 2687,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-05-09,
 48467,S48467,Starlink 2659,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-05-09,
 48468,S48468,Starlink 2685,Starlink,v1.0,inferred_mass,medium,260.0,248.0,9.0,0.32661,2021-05-09,
@@ -2498,7 +2498,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 52576,S52576,Starlink 3932,Starlink,v1.5,inferred_mass,medium,297.0,275.0,9.0,0.29455,2022-05-13,
 52577,S52577,Starlink 3836,Starlink,v1.5,inferred_mass,medium,297.0,275.0,9.0,0.29455,2022-05-13,
 52578,S52578,Starlink 3833,Starlink,v1.5,inferred_mass,medium,297.0,275.0,9.0,0.29455,2022-05-13,
-52579,S52579,Starlink 3893,Starlink,v1.5,inferred_mass,medium,297.0,275.0,9.0,0.29455,2022-05-13,
+52579,S52579,Starlink 3893,Starlink,v1.5,inferred_mass,medium,297.0,275.0,9.0,0.29455,2022-05-13,2026-09-18
 52580,S52580,Starlink 3919,Starlink,v1.5,inferred_mass,medium,297.0,275.0,9.0,0.29455,2022-05-13,
 52581,S52581,Starlink 3915,Starlink,v1.5,inferred_mass,medium,297.0,275.0,9.0,0.29455,2022-05-13,
 52582,S52582,Starlink 3886,Starlink,v1.5,inferred_mass,medium,297.0,275.0,9.0,0.29455,2022-05-13,2025-01-07
@@ -2997,7 +2997,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 53489,S53489,Starlink 4392,Starlink,v1.5,inferred_mass,medium,300.0,275.0,9.0,0.29455,2022-08-12,
 53490,S53490,Starlink 4387,Starlink,v1.5,inferred_mass,medium,300.0,275.0,9.0,0.29455,2022-08-12,
 53491,S53491,Starlink 4450,Starlink,v1.5,inferred_mass,medium,300.0,275.0,9.0,0.29455,2022-08-12,
-53492,S53492,Starlink 4451,Starlink,v1.5,inferred_mass,medium,300.0,275.0,9.0,0.29455,2022-08-12,
+53492,S53492,Starlink 4451,Starlink,v1.5,inferred_mass,medium,300.0,275.0,9.0,0.29455,2022-08-12,2026-09-21
 53493,S53493,Starlink 4361,Starlink,v1.5,inferred_mass,medium,300.0,275.0,9.0,0.29455,2022-08-12,2026-04-02
 53494,S53494,Starlink 4340,Starlink,v1.5,inferred_mass,medium,300.0,275.0,9.0,0.29455,2022-08-12,
 53495,S53495,Starlink 4429,Starlink,v1.5,inferred_mass,medium,300.0,275.0,9.0,0.29455,2022-08-12,
@@ -3411,7 +3411,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 54012,S54012,Starlink 5126,Starlink,v1.5,inferred_mass,medium,305.0,290.0,9.0,0.27931,2022-10-05,
 54013,S54013,Starlink 5098,Starlink,v1.5,inferred_mass,medium,305.0,290.0,9.0,0.27931,2022-10-05,
 54014,S54014,Starlink 5116,Starlink,v1.5,inferred_mass,medium,305.0,290.0,9.0,0.27931,2022-10-05,2024-05-25
-54015,S54015,Starlink 5055,Starlink,v1.5,inferred_mass,medium,305.0,290.0,9.0,0.27931,2022-10-05,
+54015,S54015,Starlink 5055,Starlink,v1.5,inferred_mass,medium,305.0,290.0,9.0,0.27931,2022-10-05,2026-09-20
 54051,S54051,Starlink 5195,Starlink,v1.5,inferred_mass,medium,305.0,290.0,9.0,0.27931,2022-10-20,
 54052,S54052,Starlink 5189,Starlink,v1.5,inferred_mass,medium,305.0,290.0,9.0,0.27931,2022-10-20,
 54053,S54053,Starlink 5176,Starlink,v1.5,inferred_mass,medium,305.0,290.0,9.0,0.27931,2022-10-20,
@@ -5551,7 +5551,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 58595,S58595,Starlink 30857,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2023-12-19,
 58596,S58596,Starlink 31059,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2023-12-19,
 58597,S58597,Starlink 31087,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2023-12-19,
-58598,S58598,Starlink 31079,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2023-12-19,
+58598,S58598,Starlink 31079,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2023-12-19,2026-09-23
 58599,S58599,Starlink 31072,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2023-12-19,2025-05-23
 58600,S58600,Starlink 31052,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2023-12-19,
 58601,S58601,Starlink 31074,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2023-12-19,
@@ -5626,7 +5626,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 58717,S58717,Starlink 31093,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-01-03,
 58718,S58718,Starlink 31097,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-01-03,
 58719,S58719,Starlink 31051,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-01-03,
-58720,S58720,Starlink 31027,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-01-03,
+58720,S58720,Starlink 31027,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-01-03,2026-09-22
 58721,S58721,Starlink 30972,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-01-03,
 58722,S58722,Starlink 31040,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-01-03,
 58723,S58723,Starlink 31033,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-01-03,
@@ -6017,7 +6017,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 59318,S59318,Starlink 31464,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-03-24,
 59320,S59320,Starlink 31402,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-03-25,
 59321,S59321,Starlink 31578,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-03-25,
-59322,S59322,Starlink 31530,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-03-25,
+59322,S59322,Starlink 31530,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-03-25,2026-09-21
 59323,S59323,Starlink 31565,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-03-25,
 59324,S59324,Starlink 31570,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-03-25,
 59325,S59325,Starlink 31611,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2024-03-25,
@@ -7964,7 +7964,7 @@ norad_id,jcat,object_name,bus,generation,label_source,label_confidence,launch_ma
 63114,S63114,Starlink 11600,Starlink V2MD,v2-mini-dtc,stated,high,960.0,910.0,29.0,0.92418,2025-02-27,
 63115,S63115,Starlink 11597,Starlink V2MD,v2-mini-dtc,stated,high,960.0,910.0,29.0,0.92418,2025-02-27,
 63116,S63116,Starlink 11591,Starlink V2MD,v2-mini-dtc,stated,high,960.0,910.0,29.0,0.92418,2025-02-27,
-63117,S63117,Starlink 32955,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2025-02-27,
+63117,S63117,Starlink 32955,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2025-02-27,2026-09-15
 63118,S63118,Starlink 32945,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2025-02-27,
 63119,S63119,Starlink 32941,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2025-02-27,
 63120,S63120,Starlink 32942,Starlink V2M,v2-mini,stated,high,730.0,700.0,29.0,1.20143,2025-02-27,
