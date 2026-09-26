@@ -3,7 +3,8 @@
 -- multiple of ten, which is an encoding rather than a measurement.
 
 select
-    cast(observed_at as timestamp)     as observed_at,
+    -- Naive UTC regardless of the session time zone; see stg_spacetrack__gp_history.
+    observed_at at time zone 'UTC'     as observed_at,
     cast(epoch_date as date)           as epoch_date,
 
     cast(f10_7_sfu as double)          as f10_7_sfu,

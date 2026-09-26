@@ -32,6 +32,10 @@ starlink_drag:
         # container out of local ports. Same as starlink_drag.lake's
         # DUCKDB_REMOTE_SETTINGS; harmless with a local lake.
         httpfs_connection_caching: true
+        # Every model converts timestamps to UTC explicitly, so this should not
+        # matter -- it is set so that it cannot. Tests run dbt in New York time
+        # to prove the models do not depend on it (DUCKDB_TIMEZONE).
+        TimeZone: "{{ env_var('DUCKDB_TIMEZONE', 'UTC') }}"
       secrets:
         # How DuckDB reaches an S3-compatible lake (LAKE_BACKEND=r2): SeaweedFS
         # in infra/docker, or Cloudflare R2. The bronze views store s3:// paths,

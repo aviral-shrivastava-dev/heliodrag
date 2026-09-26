@@ -9,7 +9,11 @@ select
     object_id                            as international_designator,
     object_type,
 
-    cast(epoch as timestamp)             as epoch_at,
+    -- Bronze holds UTC instants (timestamptz). A plain cast to timestamp
+    -- renders them in the session's time zone: on a laptop in India every
+    -- epoch_at came out 5h30 late, and 2024-05-11's element set was stamped
+    -- 2024-05-12. `at time zone 'UTC'` gives naive UTC whatever the session.
+    epoch at time zone 'UTC'             as epoch_at,
     cast(epoch_date as date)             as epoch_date,
 
     cast(mean_motion as double)          as mean_motion_rev_per_day,
@@ -29,6 +33,6 @@ select
     cast(rev_at_epoch as bigint)         as rev_at_epoch,
     cast(launch_date as date)            as launch_date,
     cast(decay_date as date)             as decay_date,
-    cast(creation_date as timestamp)     as created_at
+    creation_date at time zone 'UTC'     as created_at
 
 from {{ source('bronze', 'gp_history') }}

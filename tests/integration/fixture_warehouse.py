@@ -177,17 +177,24 @@ def add_empty_bookkeeping_tables(con: duckdb.DuckDBPyConnection) -> None:
         "create table if not exists bronze.ingest_audit "
         "(table_name varchar, source varchar, partition_from varchar, "
         "partition_to varchar, partition_count bigint, rows_written bigint, "
-        "rows_quarantined bigint, ingest_timestamp timestamp, ingest_date date)"
+        "rows_quarantined bigint, ingest_timestamp timestamptz, ingest_date date)"
     )
 
 
 def build_bronze(database: Path) -> None:
-    """A DuckDB database holding bronze tables shaped exactly like the real ones."""
+    """A DuckDB database holding bronze tables shaped exactly like the real ones.
+
+    The schema modules produce naive UTC timestamps; dlt lands them in the lake
+    as UTC instants, which DuckDB reads as timestamptz. Loading the naive frames
+    directly would give the models a column type the real lake never has -- and
+    did hide a model that rendered epochs in the session's time zone.
+    """
     frames = bronze_frames()
     with duckdb.connect(str(database)) as con:
         con.execute("create schema if not exists bronze")
         for name, frame in frames.items():
-            arrow = frame.to_arrow()  # noqa: F841 - referenced by the query below
+            landed = frame.with_columns(pl.col(pl.Datetime).dt.replace_time_zone("UTC"))
+            arrow = landed.to_arrow()  # noqa: F841 - referenced by the query below
             con.execute(f"create table bronze.{name} as select * from arrow")
         add_empty_bookkeeping_tables(con)
 

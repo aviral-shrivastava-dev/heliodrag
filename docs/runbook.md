@@ -26,6 +26,7 @@ starlink-drag warehouse sync      # rebuild the views dbt reads
 | `dbt build` fails a uniqueness test | [Duplicate rows](#duplicate-rows-after-a-re-run) |
 | `FileNotFoundError` with a long path | [Windows path limit](#windows-path-limit) |
 | dbt on an S3 lake: "Could not connect to server" | [Out of local ports](#dbt-on-an-s3-lake-runs-out-of-local-ports) |
+| `expression_is_true ... epoch_date = cast(epoch_at ...)` fails | [Timestamps are UTC instants](#timestamps-are-utc-instants) |
 
 ---
 
@@ -428,6 +429,22 @@ starlink-drag warehouse sync    # after any ingest, before any dbt run
 ```
 
 `make build` does this for you; a bare `dbt build` does not.
+
+### Timestamps are UTC instants
+
+Bronze timestamps (`epoch`, `creation_date`, `observed_at`) are UTC instants,
+which DuckDB reads as `timestamptz` -- and renders in the *session's* time
+zone. `cast(epoch as timestamp)` therefore means different things on different
+machines: until 2026-09-26 it did, and a warehouse built on a laptop in India
+had every `epoch_at` 5h30 late, so an element set from the evening of
+2024-05-11 was stamped 2024-05-12. Docker, running in UTC, was right; comparing
+the two found it.
+
+Always name the zone: `epoch at time zone 'UTC'` gives naive UTC anywhere. The
+dbt profile runs in UTC as well (`DUCKDB_TIMEZONE`), and the tests build the
+fixture warehouse in New York time, where 03:00 UTC is the previous day, to
+prove no model depends on it. The same applies to ad-hoc queries: a DuckDB
+session on your laptop shows bronze in local time.
 
 ---
 

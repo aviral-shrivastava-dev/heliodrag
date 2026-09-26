@@ -54,12 +54,21 @@ The copy was checked the hard way: the Docker stack built the warehouse from
 it, and every mart was compared with the one built from the local lake.
 Row counts and dimensions matched exactly; facts matched to nine significant
 digits (floating-point sums in parallel differ in the last bits). The first
-build also found a fault the local lake had hidden:
+build also found two faults the local lake had hidden:
 
 - **Out of local ports.** DuckDB opened an HTTP connection per Parquet file;
   dbt's tests on ~2,500 files each exhausted the container's ephemeral ports.
   `httpfs_connection_caching` now goes on every DuckDB connection to a remote
   lake.
+- **Timestamps in the session's time zone.** `epoch_at` differed between the
+  two warehouses by exactly 5h30. Staging cast UTC instants with a plain
+  `cast(... as timestamp)`, which renders them in the session's zone: the
+  laptop's, India. Docker, in UTC, was right. The casts now name UTC, and a
+  test builds the fixture warehouse in New York time to keep them honest.
+  Every rate, interval and join had been computed from differences and equal
+  values under a constant offset, so no number in the marts changed -- only
+  the labels, which would have misled anyone aligning epochs by the hour, and
+  under daylight saving the offset is not constant.
 
 ## Alternatives considered
 

@@ -43,6 +43,20 @@ def test_dbt_build_is_green_against_seeded_fixtures(seeded_warehouse: Path, tmp_
     assert counts["PASS"] > 50, f"expected the whole suite to run, got {counts}"
 
 
+def test_the_build_does_not_depend_on_the_session_time_zone(
+    seeded_warehouse: Path, tmp_path: Path
+) -> None:
+    """Bronze timestamps are UTC instants. A model that casts them without
+    naming a zone renders them in the session's -- on a laptop in India every
+    epoch came out 5h30 late. In New York the fixture's 03:00 UTC epochs fall
+    on the previous day, which the epoch_date tests catch."""
+    result = run_dbt(seeded_warehouse, tmp_path, env={"DUCKDB_TIMEZONE": "America/New_York"})
+
+    assert result.returncode == 0, result.stdout[-4000:]
+    epochs = table(seeded_warehouse, "int_gp__deduplicated")["epoch_at"]
+    assert set(epochs.dt.hour().to_list()) == {3}, "epoch_at must stay in UTC"
+
+
 def test_the_marts_are_populated_and_joined(seeded_warehouse: Path, tmp_path: Path) -> None:
     """A green build over empty tables would prove nothing."""
     assert run_dbt(seeded_warehouse, tmp_path).returncode == 0
@@ -128,9 +142,10 @@ def test_a_correction_replaces_the_whole_element_set(
     window over the full history did not fit in memory); plain arg_max would
     skip the NULL and stitch the old bstar onto the new element set."""
     with duckdb.connect(str(seeded_warehouse)) as con:
-        norad, epoch, gp_id = con.execute(
-            "select norad_id, epoch, gp_id from bronze.gp_history order by norad_id, epoch limit 1"
-        ).fetchone() or (None, None, None)
+        norad, epoch, epoch_utc, gp_id = con.execute(
+            "select norad_id, epoch, epoch at time zone 'UTC', gp_id "
+            "from bronze.gp_history order by norad_id, epoch limit 1"
+        ).fetchone() or (None, None, None, None)
         con.execute(
             """
             insert into bronze.gp_history
@@ -148,7 +163,7 @@ def test_a_correction_replaces_the_whole_element_set(
         rows = con.execute(
             "select gp_id, mean_motion_rev_per_day, bstar from int_gp__deduplicated "
             "where norad_id = ? and epoch_at = ?",
-            [norad, epoch],
+            [norad, epoch_utc],
         ).fetchall()
 
     assert rows == [(gp_id + 1000000, 15.5, None)]

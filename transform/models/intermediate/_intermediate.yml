@@ -11,6 +11,10 @@ models:
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [norad_id, epoch_at]
+      # epoch_date is the UTC day, set at ingest. If epoch_at ever drifts into
+      # the session's time zone again, evening epochs land on the wrong day.
+      - dbt_utils.expression_is_true:
+          expression: "epoch_date = cast(epoch_at as date)"
 
   - name: int_omni__deduplicated
     description: >
@@ -21,6 +25,9 @@ models:
         data_tests: [not_null, unique]
       - name: epoch_date
         data_tests: [not_null]
+    data_tests:
+      - dbt_utils.expression_is_true:
+          expression: "epoch_date = cast(observed_at as date)"
 
   - name: int_satellite__generation_labeled
     description: >
