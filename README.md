@@ -348,3 +348,4 @@ not fewer facts.
 | Phase 3: orchestration | [phase-3.md](docs/phases/phase-3.md) | [phase-3-plain.md](docs/phases/phase-3-plain.md) |
 | Phase 4: hardening | [phase-4.md](docs/phases/phase-4.md) | [phase-4-plain.md](docs/phases/phase-4-plain.md) |
 | Phase 5: serving and documentation | [phase-5.md](docs/phases/phase-5.md) | [phase-5-plain.md](docs/phases/phase-5-plain.md) |
+| Phase 6: streaming (optional) | [phase-6.md](docs/phases/phase-6.md) | [phase-6-plain.md](docs/phases/phase-6-plain.md) |
