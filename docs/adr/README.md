@@ -39,3 +39,5 @@ consequences is not finished.
 | [0008](0008-rate-limit-shared-across-processes-and-resumable-fetch.md) | The rate limit is shared across processes, and the element fetch resumes | accepted |
 | [0009](0009-bounded-memory-warehouse-build.md) | The warehouse build runs in bounded memory | accepted |
 | [0010](0010-one-lake-module-for-every-storage-backend.md) | One lake module, so every tool reaches S3 storage the same way | accepted |
+| [0011](0011-seaweedfs-replaces-minio.md) | SeaweedFS replaces MinIO as the local S3 server | accepted |
+| [0012](0012-move-a-lake-by-rewriting-it.md) | A lake moves between storage backends by being rewritten, not copied | accepted |

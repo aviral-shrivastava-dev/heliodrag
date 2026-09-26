@@ -2,9 +2,10 @@
 #
 #   docker compose -f infra/docker/docker-compose.yml up -d
 #
-# MinIO stands in for Cloudflare R2. Both speak the S3 API, so the only thing
-# that changes between local and production is the endpoint and the
-# credentials -- which is the point of LAKE_BACKEND (see ADR-0010).
+# SeaweedFS stands in for Cloudflare R2. Both speak the S3 API, so the only
+# thing that changes between local and production is the endpoint and the
+# credentials -- which is the point of LAKE_BACKEND (see ADR-0010). It replaced
+# MinIO when MinIO's free images were withdrawn (ADR-0011).
 #
 # Space-Track credentials come from the repository's .env, the same file the
 # uv path uses. Compose would otherwise look for .env next to this file.
@@ -15,52 +16,39 @@
 name: starlink-drag-atlas
 
 services:
-  minio:
-    # quay.io, not Docker Hub: MinIO no longer publishes minio/minio there,
-    # and pulling it fails with "repository does not exist".
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: server /data --console-address ":9001"
+  # The lake: SeaweedFS in its all-in-one `mini` mode, serving S3 on 8333. It
+  # creates the bucket itself on start (S3_BUCKET) and enforces the keys given
+  # in AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY -- a request with any other
+  # key is refused. Pinned to a release so it cannot change underneath the
+  # pipeline. Pinning did not save MinIO: its whole repository was withdrawn,
+  # pinned versions included. What catches that now is CI, which pulls this
+  # image on every push.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.47
+    command: mini -dir=/data
     environment:
-      MINIO_ROOT_USER: ${LAKE_ACCESS_KEY_ID:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${LAKE_SECRET_ACCESS_KEY:-minioadmin}
+      S3_BUCKET: ${LAKE_BUCKET:-starlink-drag-atlas}
+      AWS_ACCESS_KEY_ID: ${LAKE_ACCESS_KEY_ID:-atlas}
+      AWS_SECRET_ACCESS_KEY: ${LAKE_SECRET_ACCESS_KEY:-atlas-local-only}
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # console
+      - "8333:8333"   # S3 API
+      - "8888:8888"   # file browser: /buckets/<bucket>
     volumes:
-      - minio-data:/data
+      - lake-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "nc", "-z", "localhost", "8333"]
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 30
       start_period: 5s
-
-  # Creates the bucket once MinIO is accepting connections, then exits. A
-  # one-shot container rather than an entrypoint script, so a failure to create
-  # the bucket is visible as a failed container instead of a silent warning.
-  minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      LAKE_BUCKET: ${LAKE_BUCKET:-starlink-drag-atlas}
-      LAKE_ACCESS_KEY_ID: ${LAKE_ACCESS_KEY_ID:-minioadmin}
-      LAKE_SECRET_ACCESS_KEY: ${LAKE_SECRET_ACCESS_KEY:-minioadmin}
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set lake http://minio:9000 \"$$LAKE_ACCESS_KEY_ID\" \"$$LAKE_SECRET_ACCESS_KEY\" &&
-      mc mb --ignore-existing \"lake/$$LAKE_BUCKET\" &&
-      mc ls lake
-      "
 
   dagster-webserver:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile
     depends_on:
-      minio-init:
-        condition: service_completed_successfully
+      seaweedfs:
+        condition: service_healthy
     ports:
       - "3000:3000"
     # Space-Track credentials, from the repository root. Without them the UI
@@ -72,10 +60,10 @@ services:
         required: false
     environment:
       LAKE_BACKEND: r2
-      LAKE_ENDPOINT_URL: http://minio:9000
+      LAKE_ENDPOINT_URL: http://seaweedfs:8333
       LAKE_BUCKET: ${LAKE_BUCKET:-starlink-drag-atlas}
-      LAKE_ACCESS_KEY_ID: ${LAKE_ACCESS_KEY_ID:-minioadmin}
-      LAKE_SECRET_ACCESS_KEY: ${LAKE_SECRET_ACCESS_KEY:-minioadmin}
+      LAKE_ACCESS_KEY_ID: ${LAKE_ACCESS_KEY_ID:-atlas}
+      LAKE_SECRET_ACCESS_KEY: ${LAKE_SECRET_ACCESS_KEY:-atlas-local-only}
       DUCKDB_PATH: /opt/atlas/data/atlas.duckdb
     volumes:
       - dagster-home:/opt/dagster/home
@@ -90,23 +78,23 @@ services:
       dockerfile: infra/docker/Dockerfile
     command: ["dagster-daemon", "run", "-m", "starlink_drag.definitions"]
     depends_on:
-      minio-init:
-        condition: service_completed_successfully
+      seaweedfs:
+        condition: service_healthy
     env_file:
       - path: ../../.env
         required: false
     environment:
       LAKE_BACKEND: r2
-      LAKE_ENDPOINT_URL: http://minio:9000
+      LAKE_ENDPOINT_URL: http://seaweedfs:8333
       LAKE_BUCKET: ${LAKE_BUCKET:-starlink-drag-atlas}
-      LAKE_ACCESS_KEY_ID: ${LAKE_ACCESS_KEY_ID:-minioadmin}
-      LAKE_SECRET_ACCESS_KEY: ${LAKE_SECRET_ACCESS_KEY:-minioadmin}
+      LAKE_ACCESS_KEY_ID: ${LAKE_ACCESS_KEY_ID:-atlas}
+      LAKE_SECRET_ACCESS_KEY: ${LAKE_SECRET_ACCESS_KEY:-atlas-local-only}
       DUCKDB_PATH: /opt/atlas/data/atlas.duckdb
     volumes:
       - dagster-home:/opt/dagster/home
       - warehouse:/opt/atlas/data
 
 volumes:
-  minio-data:
+  lake-data:
   dagster-home:
   warehouse:

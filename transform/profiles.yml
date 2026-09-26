@@ -27,9 +27,14 @@ starlink_drag:
         # honest limit makes DuckDB spill to data/atlas.duckdb.tmp instead --
         # for what can spill; see int_gp__deduplicated for what could not.
         memory_limit: "{{ env_var('DUCKDB_MEMORY_LIMIT', '4GB') }}"
+        # Reuse HTTP connections to a remote lake. Without it every Parquet file
+        # read opens its own, and on the full history dbt's tests ran the
+        # container out of local ports. Same as starlink_drag.lake's
+        # DUCKDB_REMOTE_SETTINGS; harmless with a local lake.
+        httpfs_connection_caching: true
       secrets:
-        # How DuckDB reaches an S3-compatible lake (LAKE_BACKEND=r2): MinIO in
-        # infra/docker, or Cloudflare R2. The bronze views store s3:// paths,
+        # How DuckDB reaches an S3-compatible lake (LAKE_BACKEND=r2): SeaweedFS
+        # in infra/docker, or Cloudflare R2. The bronze views store s3:// paths,
         # not keys, so every connection needs this. starlink_drag.lake builds
         # these variables from the settings and passes them to dbt; with a
         # local lake the secret exists and is simply never used.

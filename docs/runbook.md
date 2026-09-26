@@ -25,6 +25,7 @@ starlink-drag warehouse sync      # rebuild the views dbt reads
 | Backfill stopped with no error at all | [The run died](#the-run-died) |
 | `dbt build` fails a uniqueness test | [Duplicate rows](#duplicate-rows-after-a-re-run) |
 | `FileNotFoundError` with a long path | [Windows path limit](#windows-path-limit) |
+| dbt on an S3 lake: "Could not connect to server" | [Out of local ports](#dbt-on-an-s3-lake-runs-out-of-local-ports) |
 
 ---
 
@@ -327,9 +328,59 @@ request ledger, the host's under `data/` and the stack's in its `warehouse`
 volume, so neither sees the other's requests. Run ingestion in one place at a
 time.
 
-**The lake lives in the `minio-data` volume.** Browse it at
-http://localhost:9001. `docker compose ... down` keeps it; `down -v` deletes
+**The lake lives in the `lake-data` volume.** Browse it at
+http://localhost:8888/buckets/. `docker compose ... down` keeps it; `down -v` deletes
 it, along with the stack's warehouse and run history.
+
+## Moving the lake to S3
+
+To put an existing local lake into the Docker stack, or into R2, without
+downloading anything again:
+
+```bash
+LAKE_BACKEND=r2 LAKE_ENDPOINT_URL=http://localhost:8333 LAKE_ACCESS_KEY_ID=atlas LAKE_SECRET_ACCESS_KEY=atlas-local-only uv run starlink-drag lake-copy
+```
+
+It rewrites element sets into the target ten days at a time, the small tables
+in one go, and fails unless every table's row count matches the source
+(ADR-0012). Do not copy the files with `aws s3 sync` or similar: Iceberg's
+metadata records each file's absolute location, so copied bytes would still
+point at the local disk.
+
+**A copy that dies part-way** -- on 2026-09-26 one did, when the laptop ran out
+of virtual memory and Windows reset Docker's VM -- is simply run again. Each
+chunk is counted in the target first: complete chunks are skipped, empty ones
+copied. Iceberg commits are all-or-nothing, so there are no half-chunks.
+
+**"the target holds N of M rows"** means the target has part of a range the
+copy did not write in one piece -- usually a copy made with different chunk
+sizes. Empty the bucket and copy again. For the Docker stack,
+`docker compose ... down -v` then `up -d` gives an empty bucket, and deletes
+whatever was in it.
+
+Afterwards, build the warehouse where it will be used -- in the Docker stack:
+
+```bash
+docker compose -f infra/docker/docker-compose.yml exec dagster-webserver dagster asset materialize -m starlink_drag.definitions --select "group:warehouse,group:silver,group:gold"
+```
+
+On 2026-09-26 the copied history built to the same marts as the local
+warehouse: identical row counts everywhere (10,762,226 satellite-days, 12,892
+satellites), identical dimensions, and fact tables equal to nine significant
+digits -- DuckDB sums floating point in parallel, so the last bits of an
+average depend on the order it happened to add in. Compare that way, not by
+exact hash.
+
+### dbt on an S3 lake runs out of local ports
+
+`IO Error: Could not connect to server error for HTTP HEAD to 'http://...'`
+from several dbt tests in a row, with the S3 server up and healthy. DuckDB
+opens a new HTTP connection per Parquet file unless told otherwise; one scan of
+the element sets left ~4,900 sockets in TIME_WAIT for a minute, and dbt's
+back-to-back tests used up the container's ~28,000 local ports by the sixth.
+`httpfs_connection_caching` fixes it: in the dbt profile, and in
+`starlink_drag.lake.DUCKDB_REMOTE_SETTINGS` for the Python connections. A new
+DuckDB connection that reads the lake must run `lake.duckdb_setup` first.
 
 ## Duplicate rows after a re-run
 

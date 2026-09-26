@@ -6,7 +6,7 @@ different shape, so every shape is built here, from one set of settings, and
 the three cannot disagree.
 
 ``local`` is a directory under ``data/``. ``r2`` is any S3-compatible bucket:
-Cloudflare R2 in production, or MinIO from ``infra/docker`` to rehearse it.
+Cloudflare R2 in production, or SeaweedFS from ``infra/docker`` to rehearse it.
 
 Until 2026-09-26 only ``local`` worked. The endpoint and keys existed in the
 settings and in docker-compose and were never handed to anything, so the
@@ -16,7 +16,7 @@ containers start, not that data flows through them. See ADR-0010.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 from urllib.parse import urlparse
 
 import dlt
@@ -69,7 +69,14 @@ def iceberg_properties(settings: Settings) -> dict[str, str]:
 
 
 def filesystem(settings: Settings) -> fsspec.AbstractFileSystem:
-    """An fsspec filesystem over the lake, for listing and reading raw files."""
+    """An fsspec filesystem over the lake, for listing and reading raw files.
+
+    Uncached, deliberately. s3fs caches directory listings inside a process,
+    and the table's current version is found by listing its metadata folder:
+    with the cache on, a write followed by a read in the same process saw the
+    table as it was before the write. Found by the lake copy's row-count check,
+    which reported 54 of 180 rows copied when all 180 had been.
+    """
     if not is_remote(settings):
         return fsspec.filesystem("file")
     lake = settings.lake
@@ -79,17 +86,28 @@ def filesystem(settings: Settings) -> fsspec.AbstractFileSystem:
         secret=lake.secret_access_key.get_secret_value(),
         endpoint_url=lake.endpoint_url,
         client_kwargs={"region_name": lake.region},
+        use_listings_cache=False,
+        skip_instance_cache=True,
     )
 
 
-def duckdb_secret(settings: Settings) -> str | None:
-    """The ``CREATE SECRET`` a DuckDB connection needs to read a remote lake.
+#: Reuse HTTP connections across files. Off by default in DuckDB 1.5, and then
+#: every Parquet file read opens and closes its own: one scan of the element
+#: sets (about 2,500 files) left ~4,900 sockets in TIME_WAIT for a minute, and
+#: dbt's back-to-back tests ran the container out of its ~28,000 local ports --
+#: "Could not connect to server" from the sixth test on. With it: none left.
+DUCKDB_REMOTE_SETTINGS: Final = ("SET httpfs_connection_caching = true",)
 
-    Path-style URLs, because MinIO serves buckets at a path rather than as a
-    subdomain, and R2 accepts either. ``None`` for a local lake.
+
+def duckdb_setup(settings: Settings) -> list[str]:
+    """Statements a DuckDB connection runs before it reads a remote lake.
+
+    The lake's secret, then :data:`DUCKDB_REMOTE_SETTINGS`. Path-style URLs,
+    because the local S3 server serves buckets at a path rather than as a
+    subdomain, and R2 accepts either. Nothing for a local lake.
     """
     if not is_remote(settings):
-        return None
+        return []
     lake = settings.lake
     endpoint = urlparse(lake.endpoint_url)
     options = {
@@ -101,7 +119,9 @@ def duckdb_secret(settings: Settings) -> str | None:
     }
     rendered = ", ".join(f"{key} '{_quote(value)}'" for key, value in options.items())
     use_ssl = "true" if endpoint.scheme == "https" else "false"
-    return f"CREATE OR REPLACE SECRET lake (TYPE s3, {rendered}, USE_SSL {use_ssl})"
+    # The secret first: creating an s3 secret loads httpfs, which owns the setting.
+    secret = f"CREATE OR REPLACE SECRET lake (TYPE s3, {rendered}, USE_SSL {use_ssl})"
+    return [secret, *DUCKDB_REMOTE_SETTINGS]
 
 
 def dbt_environment(settings: Settings) -> dict[str, str]:

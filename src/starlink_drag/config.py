@@ -66,16 +66,18 @@ class HapiSettings(BaseSettings):
 
 
 class LakeSettings(BaseSettings):
-    """Object storage holding the bronze Iceberg tables.
+    """Where the bronze Iceberg tables live.
 
-    ``local`` points at MinIO from ``infra/docker``; ``r2`` at Cloudflare R2.
-    The two are S3-compatible, so only the endpoint and credentials differ.
+    ``local`` is a directory under ``data/``. ``r2`` is any S3-compatible
+    bucket at ``endpoint_url``: Cloudflare R2, or the SeaweedFS in
+    ``infra/docker``. ``starlink_drag.lake`` turns these into what each tool
+    needs (ADR-0010).
     """
 
     model_config = SettingsConfigDict(env_prefix="LAKE_", env_file=_ENV_FILE, extra="ignore")
 
     backend: LakeBackend = "local"
-    endpoint_url: str = "http://localhost:9000"
+    endpoint_url: str = "http://localhost:8333"
     bucket: str = "starlink-drag-atlas"
     access_key_id: SecretStr = SecretStr("")
     secret_access_key: SecretStr = SecretStr("")

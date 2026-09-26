@@ -62,13 +62,15 @@ jobs:
           echo "no tracked files under data/"
 
   s3_lake:
-    name: the lake on S3 (MinIO)
+    name: the lake on S3 (SeaweedFS)
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     # The rest of the suite uses a lake on local disk. This runs the same code
-    # against a real S3 API: MinIO, standing in for Cloudflare R2. Until
+    # against a real S3 API: SeaweedFS, standing in for Cloudflare R2. Until
     # 2026-09-26 that path did not work at all, and no test would have said so.
+    # It also pulls the pinned image on every push, which is how MinIO's
+    # withdrawal from its registries was noticed (ADR-0011).
 
     steps:
       - uses: actions/checkout@v4
@@ -89,20 +91,24 @@ jobs:
       - name: Parse the dbt project
         run: make manifest
 
-      - name: Start MinIO
+      - name: Start SeaweedFS
         # Started with `docker run`, not as a service container: GitHub service
-        # containers cannot be given a command, and MinIO needs `server /data`.
-        # Same image and tag as infra/docker/docker-compose.yml.
+        # containers cannot be given a command. Same image, tag and keys as
+        # infra/docker/docker-compose.yml. Any HTTP answer means S3 is up --
+        # an unsigned request gets 403, which is the point.
         run: |
-          docker run -d --name minio -p 9000:9000 \
-            quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
-          for attempt in $(seq 1 30); do
-            curl -sf http://localhost:9000/minio/health/live && break
+          docker run -d --name seaweedfs -p 8333:8333 \
+            -e AWS_ACCESS_KEY_ID=atlas -e AWS_SECRET_ACCESS_KEY=atlas-local-only \
+            chrislusf/seaweedfs:4.47 mini -dir=/data
+          for attempt in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8333/ || true)
+            [ "$code" != "000" ] && break
             sleep 2
           done
-          curl -sf http://localhost:9000/minio/health/live
+          echo "S3 answered with HTTP $code"
+          [ "$code" != "000" ]
 
       - name: Test the lake on S3
         env:
-          LAKE_TEST_S3_ENDPOINT: http://localhost:9000
+          S3_TEST_ENDPOINT: http://localhost:8333
         run: uv run pytest tests/integration/test_s3_lake.py -rs

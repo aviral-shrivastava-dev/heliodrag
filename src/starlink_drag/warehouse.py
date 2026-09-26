@@ -87,11 +87,10 @@ def sync(settings: Settings, *, database: Path | None = None) -> list[ViewSync]:
 
     results: list[ViewSync] = []
     with duckdb.connect(str(target)) as con:
-        secret = lake.duckdb_secret(settings)
-        if secret:
-            # Only this connection's counts need it. dbt makes its own secret
-            # from the profile, because the views store paths, not keys.
-            con.execute(secret)
+        # Only this connection's counts need it. dbt makes its own secret from
+        # the profile, because the views store paths, not keys.
+        for statement in lake.duckdb_setup(settings):
+            con.execute(statement)
         con.execute(f"CREATE SCHEMA IF NOT EXISTS {BRONZE_SCHEMA}")
         for table, view in VIEWS.items():
             qualified = f"{BRONZE_SCHEMA}.{view}"

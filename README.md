@@ -127,24 +127,35 @@ Makefile wraps the same commands (`make demo`, `make test`) for those with
 
 ### Or run it the way production would: Docker
 
-`infra/docker` runs the same pipeline as services: MinIO as the lake, standing
-in for Cloudflare R2, and Dagster's web UI and scheduler. It needs Docker
+`infra/docker` runs the same pipeline as services: SeaweedFS as the lake,
+standing in for Cloudflare R2, and Dagster's web UI and scheduler. It needs Docker
 Desktop as well as the `.env` above, and the first build takes a few minutes.
 
 ```bash
 docker compose -f infra/docker/docker-compose.yml up -d --build
 ```
 
-Dagster is then at **http://localhost:3000** and MinIO's console at
-**http://localhost:9001** (local-only login `minioadmin` / `minioadmin`). Land
-and model a few days inside the stack -- any range works:
+Dagster is then at **http://localhost:3000**, and the lake's files can be
+browsed at **http://localhost:8888/buckets/**. Land and model a few days inside
+the stack -- any range works:
 
 ```bash
 docker compose -f infra/docker/docker-compose.yml exec dagster-webserver starlink-drag backfill --start 2026-09-15 --end 2026-09-16
 ```
 
-That lake lives in MinIO, separate from the one `demo` builds on your disk. Run
-ingestion in one place at a time: each keeps its own record of Space-Track
+That lake lives in SeaweedFS, separate from the one `demo` builds on your disk.
+
+**Already have a lake on disk?** Copy it into the stack instead of downloading
+it again. No API calls; every table's row count is checked against the source,
+and a copy that dies part-way can simply be run again. Then build the
+warehouse inside the stack:
+
+```bash
+LAKE_BACKEND=r2 LAKE_ENDPOINT_URL=http://localhost:8333 LAKE_ACCESS_KEY_ID=atlas LAKE_SECRET_ACCESS_KEY=atlas-local-only uv run starlink-drag lake-copy
+docker compose -f infra/docker/docker-compose.yml exec dagster-webserver dagster asset materialize -m starlink_drag.definitions --select "group:warehouse,group:silver,group:gold"
+```
+
+Run ingestion in one place at a time: each keeps its own record of Space-Track
 requests. Stop the stack with
 `docker compose -f infra/docker/docker-compose.yml down`.
 
@@ -173,12 +184,12 @@ publishable; the element-level data behind them is not.
 | Packaging | uv, `src/` layout, committed `uv.lock` | Reproducible installs fast enough to run on every CI push ([ADR-0001](docs/adr/0001-packaging-with-uv.md)) |
 | Ingestion | httpx clients + dlt | The clients own rate limiting and retries, which must be exact; dlt owns the write, which should be boring |
 | Validation | Pandera, with a quarantine table | A bad row is kept with its reason, not dropped silently or loaded silently |
-| Lake | Apache Iceberg on Parquet: local disk, or S3-compatible storage | Snapshots make "which files are current" a fact rather than a directory listing. The same code writes to a local folder or to MinIO and R2, tested against MinIO in CI ([ADR-0010](docs/adr/0010-one-lake-module-for-every-storage-backend.md)) |
+| Lake | Apache Iceberg on Parquet: local disk, or S3-compatible storage | Snapshots make "which files are current" a fact rather than a directory listing. The same code writes to a local folder or to any S3 server, tested against SeaweedFS in CI ([ADR-0010](docs/adr/0010-one-lake-module-for-every-storage-backend.md)) |
 | Engine | DuckDB + Polars | The whole dataset is a few gigabytes. A single process is faster, cheaper and easier to reason about than a cluster |
 | Transformation | dbt-core + dbt-duckdb | Versioned, tested SQL with lineage a reviewer can read; 84 tests on every build |
 | Orchestration | Dagster | Partitioned assets make backfills and per-day idempotency the default, not a convention ([ADR-0002](docs/adr/0002-dagster-over-airflow.md)) |
 | Serving | Streamlit + Altair | Reads gold marts only, through connections that never block a build ([ADR-0006](docs/adr/0006-explorer-reads-gold-through-short-lived-connections.md)) |
-| Infrastructure | Terraform (Cloudflare R2), docker-compose (MinIO + Dagster) | The production lake, and a local stack that runs the whole pipeline against the same S3 API |
+| Infrastructure | Terraform (Cloudflare R2), docker-compose (SeaweedFS + Dagster) | The production lake, and a local stack that runs the whole pipeline against the same S3 API |
 | CI | GitHub Actions | Tests and a real dbt build on every push; a nightly check that the upstream APIs have not changed shape |
 
 ## Monthly cost
@@ -228,8 +239,8 @@ applied: that needs a Cloudflare account and token.
   defaults leave headroom for the nightly check on GitHub; ingestion on two
   machines would need its budget split
   ([runbook](docs/runbook.md#rate-limit-exhaustion)).
-- **R2 is not deployed.** The S3 path is tested against MinIO, locally and in
-  CI, and is the code R2 would use; creating the bucket needs a Cloudflare
+- **R2 is not deployed.** The S3 path is tested against SeaweedFS, locally and
+  in CI, and is the code R2 would use; creating the bucket needs a Cloudflare
   account and token. Until 2026-09-26 the S3 path did not work at all -- Phase 4
   had checked that the Docker stack starts, not that data flows through it
   ([ADR-0010](docs/adr/0010-one-lake-module-for-every-storage-backend.md)).
@@ -243,7 +254,7 @@ applied: that needs a Cloudflare account and token.
   space-weather forcing with bootstrap confidence intervals, conditioned on
   altitude shell, date and manoeuvring, and a superposed-epoch comparison of
   storm responses.
-- Deploy the lake to R2 -- the code path is already tested against MinIO -- and
+- Deploy the lake to R2 -- the code path is already tested against SeaweedFS -- and
   move the nightly ingest onto it.
 - A minimal, shareable reproduction of the DuckDB bug for the DuckDB project.
 - A hosted, aggregates-only explorer, which would be publishable.
@@ -263,7 +274,7 @@ src/starlink_drag/
 transform/   the dbt project: staging -> intermediate -> marts
 app/         the Streamlit explorer: layout only
 analysis/    notebooks and figures (Phase 7); never imported by src/
-infra/       Terraform for R2, docker-compose for MinIO and Dagster
+infra/       Terraform for R2, docker-compose for SeaweedFS and Dagster
 ```
 
 ## Data and licensing

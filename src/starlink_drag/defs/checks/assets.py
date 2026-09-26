@@ -42,9 +42,8 @@ def _query(settings: AtlasSettings, sql: str) -> Any:
     with duckdb.connect(str(database), read_only=True) as con:
         # The bronze views hold s3:// paths when the lake is remote; reading
         # them needs the lake's keys in this connection too.
-        secret = lake.duckdb_secret(resolved)
-        if secret:
-            con.execute(secret)
+        for statement in lake.duckdb_setup(resolved):
+            con.execute(statement)
         return con.execute(sql).fetchone()
 
 

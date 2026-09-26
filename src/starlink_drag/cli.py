@@ -15,6 +15,7 @@ from typing import Annotated
 import typer
 
 from starlink_drag import __version__
+from starlink_drag.cli_lake import lake_copy_command
 from starlink_drag.cli_serving import (
     app_command,
     data_dictionary_command,
@@ -43,6 +44,7 @@ app.command("demo")(demo_command)
 app.command("app")(app_command)
 app.command("docs-site")(docs_site_command)
 app.command("data-dictionary")(data_dictionary_command)
+app.command("lake-copy")(lake_copy_command)
 
 StartOpt = Annotated[
     dt.datetime,
