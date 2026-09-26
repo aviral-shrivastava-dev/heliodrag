@@ -18,6 +18,23 @@ what the server returned.
 
 Regenerate by requesting the same URLs from `https://cdaweb.gsfc.nasa.gov/hapi`.
 
+## `swpc/` — genuine, unmodified
+
+NOAA Space Weather Prediction Center products are US-government work in the
+**public domain**, so these are what `services.swpc.noaa.gov` returned on
+2026-09-26, around 18:00 UTC, unmodified except for the final newline the
+repository's end-of-file hook adds (JSON parsers ignore it). They feed only
+the optional streaming path (ADR-0014).
+
+| File | Product |
+| --- | --- |
+| `planetary_k_index_1m.json` | `json/planetary_k_index_1m.json`: Kp estimated every minute, six hours of it |
+| `noaa-planetary-k-index.json` | `products/noaa-planetary-k-index.json`: three-hourly Kp and ap, a week |
+| `kyoto-dst.json` | `products/kyoto-dst.json`: hourly quick-look Dst, a week |
+| `10cm-flux-30-day.json` | `products/10cm-flux-30-day.json`: daily F10.7, 30 days |
+
+Regenerate by requesting the same paths from `https://services.swpc.noaa.gov`.
+
 ## `spacetrack/` — real structure, substituted values
 
 **These are not real Space-Track data, and that is deliberate.**

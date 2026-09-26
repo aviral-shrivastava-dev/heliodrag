@@ -160,6 +160,21 @@ Run ingestion in one place at a time: each keeps its own record of Space-Track
 requests. Stop the stack with
 `docker compose -f infra/docker/docker-compose.yml down`.
 
+**The live drag nowcast (optional).** A separate streaming path adds Redpanda,
+a producer publishing current element sets (hourly) and NOAA space weather
+(every five minutes), and a consumer keeping a rolling per-generation nowcast in
+its own Iceberg table. It is off unless asked for, and the batch stack above is
+exactly the same with or without it
+([ADR-0013](docs/adr/0013-optional-streaming-path-on-redpanda.md)):
+
+```bash
+docker compose -f infra/docker/docker-compose.yml --profile streaming up -d --build
+```
+
+The explorer is then at **http://localhost:8501**, with the nowcast on its
+*live nowcast* page. Drag terms appear within a minute of starting; altitude
+rates fill in over the first hours, as each satellite reports a second time.
+
 ## Sample output
 
 ![The explorer: daily median altitude change for each Starlink generation, under a strip of the Dst geomagnetic index, with storm days shaded across every panel](docs/images/explorer.png)
@@ -190,6 +205,7 @@ publishable; the element-level data behind them is not.
 | Transformation | dbt-core + dbt-duckdb | Versioned, tested SQL with lineage a reviewer can read; 84 tests on every build |
 | Orchestration | Dagster | Partitioned assets make backfills and per-day idempotency the default, not a convention ([ADR-0002](docs/adr/0002-dagster-over-airflow.md)) |
 | Serving | Streamlit + Altair | Reads gold marts only, through connections that never block a build ([ADR-0006](docs/adr/0006-explorer-reads-gold-through-short-lived-connections.md)) |
+| Streaming (optional) | Redpanda + confluent-kafka, NOAA SWPC | Kafka's API in one small process; the topic is the consumer's only state, so a restart is the recovery ([ADR-0013](docs/adr/0013-optional-streaming-path-on-redpanda.md)). SWPC because OMNI arrives a week late ([ADR-0014](docs/adr/0014-swpc-for-live-space-weather.md)) |
 | Infrastructure | Terraform (Cloudflare R2), docker-compose (SeaweedFS + Dagster) | The production lake, and a local stack that runs the whole pipeline against the same S3 API |
 | CI | GitHub Actions | Tests and a real dbt build on every push; a nightly check that the upstream APIs have not changed shape |
 
@@ -272,8 +288,8 @@ applied: that needs a Cloudflare account and token.
   move the nightly ingest onto it.
 - A minimal, shareable reproduction of the DuckDB bug for the DuckDB project.
 - A hosted, aggregates-only explorer, which would be publishable.
-- Phase 6, a streaming drag nowcast, is optional and not planned: nothing in
-  the research question needs sub-daily latency.
+- Add SWPC to the nightly upstream contract check, and compact the nowcast
+  table, which gains a small Iceberg commit every snapshot.
 
 ## Layout
 
@@ -285,10 +301,11 @@ src/starlink_drag/
   ingest/    landing sources into bronze
   defs/      Dagster wiring only; no business logic
   serving/   the explorer's queries and charts
+  stream/    the optional streaming path: producer, consumer, nowcast
 transform/   the dbt project: staging -> intermediate -> marts
-app/         the Streamlit explorer: layout only
+app/         the Streamlit explorer: layout only; pages/ holds the live nowcast
 analysis/    notebooks and figures (Phase 7); never imported by src/
-infra/       Terraform for R2, docker-compose for SeaweedFS and Dagster
+infra/       Terraform for R2, docker-compose for SeaweedFS, Dagster and Redpanda
 ```
 
 ## Data and licensing
@@ -298,7 +315,8 @@ by a US-government user agreement. `data/` is gitignored, CI fails if anything
 under it is tracked, and a pre-commit hook refuses such a commit. Only derived
 products -- aggregates, the schema, figures -- are published.
 
-NASA OMNI data, obtained through the SPDF HAPI server, is public domain.
+NASA OMNI data, obtained through the SPDF HAPI server, and NOAA SWPC space
+weather, used by the live nowcast, are public domain.
 Generation labels derive from Jonathan McDowell's
 [GCAT](https://planet4589.org/space/gcat/) (CC-BY).
 
@@ -311,8 +329,8 @@ Generation labels derive from Jonathan McDowell's
 | 2 | Transformation: dbt staging, intermediate, marts | done |
 | 3 | Orchestration: partitioned Dagster assets, asset checks, CLI parity | done |
 | 4 | Hardening: coverage, integration tests, nightly CI, runbook, Terraform | done |
-| 5 | Serving: Streamlit explorer, this README, published dbt docs | **done** |
-| 6 | Streaming (optional): drag nowcast | not planned |
+| 5 | Serving: Streamlit explorer, this README, published dbt docs | done |
+| 6 | Streaming (optional): Redpanda, a live per-generation drag nowcast | **done** |
 | 7 | Analysis: per-generation regression with bootstrap CIs, figures | next |
 
 ## Documentation

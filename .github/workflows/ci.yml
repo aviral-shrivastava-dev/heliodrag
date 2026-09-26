@@ -112,3 +112,47 @@ jobs:
         env:
           S3_TEST_ENDPOINT: http://localhost:8333
         run: uv run pytest tests/integration/test_s3_lake.py -rs
+
+  stream:
+    name: the streaming path (Redpanda)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Phase 6: the producer, consumer and live nowcast through a real broker.
+    # The main job runs the batch suite without one, and skips these tests;
+    # this is where "the nowcast updates live" is checked on every push. It
+    # also pulls the pinned Redpanda image, so a withdrawn tag is noticed here
+    # first (ADR-0011's lesson).
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.16"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+
+      - name: Start Redpanda
+        # Same image and tag as infra/docker/docker-compose.yml.
+        run: |
+          docker run -d --name redpanda -p 19092:19092 redpandadata/redpanda:v26.2.3 \
+            redpanda start --mode dev-container --smp 1 --memory 512M --overprovisioned \
+            --kafka-addr 0.0.0.0:19092 --advertise-kafka-addr localhost:19092
+          for attempt in $(seq 1 60); do
+            docker exec redpanda rpk cluster health 2>/dev/null | grep -Eq 'Healthy:.+true' && break
+            sleep 2
+          done
+          docker exec redpanda rpk cluster health
+
+      - name: Test the streaming path
+        env:
+          KAFKA_TEST_BOOTSTRAP: localhost:19092
+        run: uv run pytest tests/integration/test_stream.py -rs

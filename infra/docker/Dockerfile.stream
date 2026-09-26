@@ -1,0 +1,33 @@
+# The streaming path (Phase 6): producer, consumer and the explorer.
+#
+# A separate image from the Dagster one, so the batch image is byte-for-byte
+# what it was: this one adds the `stream` dependency group (the Kafka client)
+# and the explorer, and leaves out dbt, which nothing here runs.
+
+FROM python:3.12-slim-bookworm
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.16 /uv /uvx /bin/
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /opt/atlas
+
+COPY pyproject.toml uv.lock README.md LICENSE ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev --group stream
+
+COPY src/ ./src/
+COPY app/ ./app/
+COPY .streamlit/ ./.streamlit/
+# The consumer labels satellites from the committed GCAT-derived seed.
+COPY transform/seeds/ ./transform/seeds/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --group stream
+
+ENV PATH="/opt/atlas/.venv/bin:$PATH"
+
+EXPOSE 8501
+
+CMD ["starlink-drag", "stream", "consume"]

@@ -27,7 +27,7 @@ Start here:
 | 3 | Orchestration: partitioned Dagster assets | [phase-3.md](phase-3.md) | [phase-3-plain.md](phase-3-plain.md) |
 | 4 | Hardening: coverage, nightly CI, runbook, Terraform | [phase-4.md](phase-4.md) | [phase-4-plain.md](phase-4-plain.md) |
 | 5 | Serving: Streamlit explorer, full README, published dbt docs | [phase-5.md](phase-5.md) | [phase-5-plain.md](phase-5-plain.md) |
-| 6 | Streaming (optional): Redpanda nowcast -- not planned | | |
+| 6 | Streaming (optional): Redpanda, a live per-generation drag nowcast | [phase-6.md](phase-6.md) | [phase-6-plain.md](phase-6-plain.md) |
 | 7 | Analysis: regression, bootstrap CIs, figures | | |
 
 A phase's pair of documents is written **when that phase is built**, not before.

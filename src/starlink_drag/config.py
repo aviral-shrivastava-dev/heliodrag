@@ -84,6 +84,32 @@ class LakeSettings(BaseSettings):
     region: str = "auto"
 
 
+class StreamSettings(BaseSettings):
+    """The optional streaming path (Phase 6): Redpanda, a producer, a consumer.
+
+    Nothing in the batch pipeline reads these. The poll intervals have floors
+    because both sources are shared: Space-Track asks that current element sets
+    be fetched no more than once an hour, and SWPC updates its 1-minute Kp once
+    a minute at best.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="STREAM_", env_file=_ENV_FILE, extra="ignore")
+
+    bootstrap_servers: str = "localhost:19092"
+    gp_topic: str = "starlink.gp"
+    weather_topic: str = "spaceweather.swpc"
+    rejected_topic: str = "starlink.rejected"
+
+    gp_poll_minutes: int = Field(default=60, ge=60)
+    swpc_poll_minutes: int = Field(default=5, ge=1)
+    swpc_base_url: str = "https://services.swpc.noaa.gov"
+
+    window_hours: int = Field(default=24, gt=0, le=72)
+    snapshot_seconds: int = Field(default=900, ge=10)
+    """How often the consumer writes a nowcast. Every write is an Iceberg
+    commit, so this trades freshness against small files."""
+
+
 class Settings(BaseSettings):
     """Top-level settings object. Obtain it via :func:`get_settings`."""
 
@@ -98,6 +124,7 @@ class Settings(BaseSettings):
     spacetrack: SpaceTrackSettings = Field(default_factory=SpaceTrackSettings)
     hapi: HapiSettings = Field(default_factory=HapiSettings)
     lake: LakeSettings = Field(default_factory=LakeSettings)
+    stream: StreamSettings = Field(default_factory=StreamSettings)
 
 
 @lru_cache(maxsize=1)

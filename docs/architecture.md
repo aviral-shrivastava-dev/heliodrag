@@ -142,8 +142,38 @@ materialises the newest partition. Every operation is also reachable from the
 | Upstream contract check | nightly workflow | Space-Track or NASA changing the shape of a response |
 | Data dictionary | `docs/data_dictionary.md` | Generated from dbt, so it cannot go stale by hand |
 
+## The optional streaming path — `src/starlink_drag/stream`
+
+Beside the batch path, not part of it (Phase 6,
+[ADR-0013](adr/0013-optional-streaming-path-on-redpanda.md)):
+
+```
+Space-Track (hourly) ─┐                  ┌─ starlink.gp ────────┐
+                      ├─ producer ──────►┤                      ├─► consumer ─► stream/stream_drag_nowcast ─► live page
+NOAA SWPC (5 min) ────┘  validates;      ├─ spaceweather.swpc ──┘   rolling 24 h,
+                         refusals ──────►└─ starlink.rejected       per generation
+```
+
+- The producer validates element sets against the bronze contract and space
+  weather against physical bounds, and sends refusals to their own topic with
+  the reason.
+- The consumer keeps no state of its own: it replays the retained topic on
+  start, commits no offsets, and windows by element-set epoch rather than the
+  clock, so a replay reproduces the live nowcast.
+- The nowcast is its own Iceberg table in a `stream` dataset; no warehouse view
+  covers it, so dbt and the marts cannot see it.
+- Space weather comes from NOAA SWPC, because OMNI is a week late
+  ([ADR-0014](adr/0014-swpc-for-live-space-weather.md)). Nothing in the marts
+  comes from SWPC.
+
+It is isolated mechanically: the Kafka client is a separate dependency group
+the batch image does not install, the services run under a Compose profile, and
+a test fails if loading the Dagster definitions loads any streaming code.
+
 ## What is deliberately absent
 
-No Kafka, Spark or Kubernetes. The whole Solar Cycle 25 dataset is a few
-gigabytes and fits on a laptop; a cluster would add cost and failure modes and
-answer no question this project asks.
+No Spark or Kubernetes, and no Kafka in the batch path. The whole Solar Cycle
+25 dataset is a few gigabytes and fits on a laptop; a cluster would add cost
+and failure modes and answer no question this project asks. The one broker,
+Redpanda, exists only for the optional streaming path, which the research does
+not need.

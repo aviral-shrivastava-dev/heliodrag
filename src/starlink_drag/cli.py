@@ -22,6 +22,7 @@ from starlink_drag.cli_serving import (
     demo_command,
     docs_site_command,
 )
+from starlink_drag.cli_stream import stream_app
 from starlink_drag.config import Settings, get_settings
 
 app = typer.Typer(
@@ -39,6 +40,7 @@ warehouse_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(warehouse_app)
+app.add_typer(stream_app)
 
 app.command("demo")(demo_command)
 app.command("app")(app_command)

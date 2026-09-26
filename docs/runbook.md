@@ -25,6 +25,7 @@ starlink-drag warehouse sync      # rebuild the views dbt reads
 | Backfill stopped with no error at all | [The run died](#the-run-died) |
 | `dbt build` fails a uniqueness test | [Duplicate rows](#duplicate-rows-after-a-re-run) |
 | `FileNotFoundError` with a long path | [Windows path limit](#windows-path-limit) |
+| Live nowcast page: stale, empty, or no altitude rates | [The streaming path](#the-streaming-path) |
 | dbt on an S3 lake: "Could not connect to server" | [Out of local ports](#dbt-on-an-s3-lake-runs-out-of-local-ports) |
 | `expression_is_true ... epoch_date = cast(epoch_at ...)` fails | [Timestamps are UTC instants](#timestamps-are-utc-instants) |
 
@@ -332,6 +333,47 @@ time.
 **The lake lives in the `lake-data` volume.** Browse it at
 http://localhost:8888/buckets/. `docker compose ... down` keeps it; `down -v` deletes
 it, along with the stack's warehouse and run history.
+
+## The streaming path
+
+Optional, and separate from everything else here (ADR-0013). Start, inspect
+and stop it:
+
+```bash
+docker compose -f infra/docker/docker-compose.yml --profile streaming up -d
+docker compose -f infra/docker/docker-compose.yml logs -f stream-producer stream-consumer
+docker compose -f infra/docker/docker-compose.yml exec redpanda rpk topic list
+docker compose -f infra/docker/docker-compose.yml exec redpanda rpk topic consume starlink.rejected -n 5
+docker compose -f infra/docker/docker-compose.yml --profile streaming stop
+```
+
+**No altitude rates yet.** Expected for the first hours after a start with an
+empty topic: a rate needs two element sets from the same satellite at least six
+hours apart, and Space-Track is polled hourly. BSTAR and space weather are
+there from the first minute.
+
+**"Is the consumer running?"** The page warns when no nowcast has been written
+for twice the snapshot interval plus five minutes. Check the consumer's log.
+Restarting it is always safe: it keeps no state, rewinds to the start of the
+retained topic and rebuilds the same nowcast (tested).
+
+**"Newest element set: 4 h ago"** is normal. It is Space-Track's own publishing
+delay, not the pipeline's. Far older means the producer's Space-Track polls
+are failing -- its log says why, and it retries at the next poll rather than
+exiting. Without credentials it publishes space weather only, and says so.
+
+**Records on `starlink.rejected`** carry the reason they were refused. A burst
+of `no <field> field` from SWPC means a product changed shape; compare a live
+response with `tests/fixtures/swpc/`.
+
+**Never lower `STREAM_GP_POLL_MINUTES` below 60.** The settings refuse it:
+Space-Track asks for current element sets at most hourly. The container's
+rate-limit ledger counts only its own requests (two an hour), so do not run a
+large host ingestion at the same moment as a burst of producer restarts.
+
+**The nowcast table grows by one small commit per snapshot** (every 15 minutes
+by default, `STREAM_SNAPSHOT_SECONDS`). Harmless for weeks; compaction is future
+work.
 
 ## Moving the lake to S3
 
