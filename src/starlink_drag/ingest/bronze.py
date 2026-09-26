@@ -118,6 +118,33 @@ def make_pipeline(name: str, settings: Settings) -> dlt.Pipeline:
     )
 
 
+def run_pipeline(pipeline: dlt.Pipeline, resource: Any) -> None:
+    """Load ``resource``, first finishing anything a crashed load left behind.
+
+    dlt keeps an interrupted load as a pending package, and a plain ``run``
+    afterwards silently loses one of the two batches. Which one depends on how
+    far the crash got: on 2026-09-26, after a load ran out of memory, dlt loaded
+    the leftover and ignored the data it was handed, with only a warning; in
+    tests/integration/test_bronze.py, where the leftover was prepared but never
+    started loading, the new data lands and the leftover vanishes. Neither
+    raises, and the caller reports rows as written either way.
+
+    So pending work is finished explicitly first. It is real data from the
+    crashed run, validated before it was extracted, and bronze is append-only,
+    so landing it can at worst add rows the intermediate layer deduplicates.
+    Only then is the new data run.
+    """
+    if pipeline.has_pending_data:
+        pipeline.normalize()
+        pipeline.load()
+    if pipeline.has_pending_data:
+        raise RuntimeError(
+            f"dlt pipeline {pipeline.pipeline_name!r} still has pending data after "
+            "loading it; refusing to write, which would silently drop the new rows"
+        )
+    pipeline.run(resource, table_format="iceberg", loader_file_format="parquet")
+
+
 def write(
     frame: pl.DataFrame,
     spec: BronzeSpec,
@@ -148,8 +175,7 @@ def write(
         write_disposition="append",
         columns={spec.partition_column: {"partition": True}},
     )
-    pipeline = make_pipeline(pipeline_name or spec.table, settings)
-    pipeline.run(resource, table_format="iceberg", loader_file_format="parquet")
+    run_pipeline(make_pipeline(pipeline_name or spec.table, settings), resource)
     return LoadOutcome(spec.table, partitions, frame.height, 0)
 
 
@@ -181,8 +207,7 @@ def write_quarantine(frame: pl.DataFrame, settings: Settings) -> int:
         write_disposition="append",
         columns={"ingest_date": {"partition": True}},
     )
-    pipeline = make_pipeline(QUARANTINE_TABLE, settings)
-    pipeline.run(resource, table_format="iceberg", loader_file_format="parquet")
+    run_pipeline(make_pipeline(QUARANTINE_TABLE, settings), resource)
     return frame.height
 
 
@@ -222,9 +247,7 @@ def write_audit(
         write_disposition="append",
         columns={"ingest_date": {"partition": True}},
     )
-    make_pipeline(AUDIT_TABLE, settings).run(
-        resource, table_format="iceberg", loader_file_format="parquet"
-    )
+    run_pipeline(make_pipeline(AUDIT_TABLE, settings), resource)
 
 
 def land(

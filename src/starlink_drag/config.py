@@ -36,10 +36,19 @@ class SpaceTrackSettings(BaseSettings):
     password: SecretStr = SecretStr("")
     base_url: str = "https://www.space-track.org"
 
-    requests_per_minute: int = Field(default=29, gt=0, le=29)
-    requests_per_hour: int = Field(default=299, gt=0, le=299)
+    # The ceilings are Space-Track's (fewer than 30 and 300). The defaults sit
+    # below them because the limit belongs to the *account*, and the ledger can
+    # only count this machine: the nightly contract check on GitHub makes three
+    # requests from elsewhere, within seconds of each other.
+    requests_per_minute: int = Field(default=25, gt=0, le=29)
+    requests_per_hour: int = Field(default=290, gt=0, le=299)
     max_retries: int = Field(default=5, ge=0)
     norad_ids_per_request: int = Field(default=200, gt=0)
+
+    ledger_path: Path = Path("data/.spacetrack/ledger.sqlite")
+    """Where every process on this machine records its Space-Track requests,
+    so the limit holds across processes (ADR-0008). Inside ``data/``: it is
+    local state, never committed."""
 
     @property
     def is_configured(self) -> bool:

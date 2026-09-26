@@ -105,31 +105,27 @@ does **not** trip this, because it only fires when some other window had rows.
    starlink-drag ingest gp --start 2020-09-27 --end 2020-12-26
    ```
 
-**Do not run two ingestions at once.** The limiter keeps its window in process
-memory (ADR-0003). Two processes each believe they are within the limit while
-together exceeding it. The Dagster assets share a concurrency key, but a bare
-`dagster asset materialize` does not queue — so this is currently an operational
-rule, not something the machine enforces.
+**Running two ingestions at once is safe for the limit.** Every request from
+every process on this machine is recorded in one ledger,
+`data/.spacetrack/ledger.sqlite`, and each process checks it under a lock before
+sending (ADR-0008). A retry, a second command or the next Dagster step sees what
+the others sent in the last hour and waits. They share one budget, so two runs
+at once are each slower, not faster.
 
-**Nor two one after the other, without a gap.** "At once" is not the only way
-to share an hour. `starlink-drag backfill` runs the catalogue step and the
-element fetch as *separate* Dagster runs, and so as separate processes with
-separate limiters; two backfills over different ranges, started back to back,
-are separate processes too. Each new process starts counting from zero while
-the previous one's requests are still inside Space-Track's rolling hour. This
-was noticed on 2026-09-25, before it happened: a resume queued its second range
-to start the moment the first finished, which could have put about 450
-requests into one hour. The fix was operational:
+This used to be a rule you had to follow. On 2026-09-25 a resume nearly
+started a second range the moment the first finished -- separate processes,
+separate in-memory limiters -- and on 2026-09-26 a Dagster retry did exactly
+that and sent about 350 requests in half an hour. The ledger is the fix.
 
-- leave an hour between Space-Track-heavy processes, and
-- give a large run headroom for the small catalogue step in front of it:
+**The ledger only sees this machine.** The limit belongs to the Space-Track
+account, and the nightly contract check on GitHub uses the same account from
+elsewhere. That is why the defaults are 25 a minute and 290 an hour rather than
+29 and 299: the headroom is for requests the ledger cannot count. If you run
+ingestion on two machines, give each its own lower budget:
 
-  ```bash
-  SPACETRACK_REQUESTS_PER_HOUR=280 starlink-drag backfill --start 2025-01-01
-  ```
-
-A limiter shared between processes would remove the rule; it is listed as
-future work in the README.
+```bash
+SPACETRACK_REQUESTS_PER_HOUR=140 starlink-drag backfill --start 2025-01-01
+```
 
 ---
 
@@ -243,42 +239,70 @@ service, or the Dagster daemon with a schedule.
 
 ### The run died of memory, and its retry made things worse
 
-**Looks like:** `pyarrow.lib.ArrowMemoryError: realloc of size ... failed` or
-`ZSTD compression failed: Allocation error : not enough memory` in the dlt
-load, then `STEP_UP_FOR_RETRY`, then windows that were already landed being
-fetched again -- and then windows returning `0 rows, 0 partitions`.
+**What happened, on 2026-09-26.** The element fetch held a whole 90-day window
+in memory before writing it. At 2025 volumes -- about 12,000 satellites -- that
+is about 1.7M element sets, and the write ran out of memory
+(`ArrowMemoryError`, `ZSTD compression failed: ... not enough memory`).
+Dagster's retry then restarted the step as a new process, with a limiter that
+remembered nothing, from the start of the range. About 350 requests went out in
+half an hour against a limit of 300 an hour, Space-Track answered the excess
+with empty windows, and the run was stopped by hand.
 
-**What happened, on 2026-09-26.** The element fetch holds one whole window in
-memory before writing it. At 2025 volumes -- about 12,000 satellites -- a 90-day
-window is about 1.7M element sets, and the fourth window's write ran out of
-memory. Dagster's retry policy then restarted the step **as a new process**,
-with a new rate limiter, from the start of the range. About 350 requests went
-out in half an hour; Space-Track's hourly limit is 300, and it answered the
-excess with empty windows. The run was stopped by hand.
+**What protects you now** (ADR-0008):
 
-**What to do until the ingest is fixed:**
+- The fetch writes whenever it has collected 400,000 rows, so memory is
+  bounded by rows, not by how many satellites are in orbit.
+- The rate limit is kept in the shared ledger, so a retry cannot exceed it.
+- A retry resumes: each run records the windows it has landed in
+  `data/checkpoints/gp_history-<run id>.json` and a retry of the same run skips
+  them. The file is removed when the run succeeds.
+- Space-Track steps retry after 10, 20 and 40 minutes, not 30 seconds, so the
+  rolling hour has time to drain.
+- A batch dlt left behind after a crash is loaded before any new write, never
+  silently traded for it (below).
 
-1. Stop the run. Do not let Dagster retry an element fetch: every retry
-   re-requests the whole range with a limiter that has forgotten the last hour.
-2. Wait at least an hour before any Space-Track request.
-3. Land the rest with the plain CLI, which is one process with no automatic
-   retries, in smaller windows so memory stays bounded:
+**If a run still dies,** re-run the same range. The checkpoint is keyed by run
+id, so only Dagster's *automatic* retries -- the same run, a new process --
+resume from it. Re-executing from the UI or starting a new backfill is a new
+run: it re-fetches from the start of its range, which is safe under the shared
+limit, only slower. To avoid re-fetching, start the new range where the landed
+data ends. Without Dagster:
+
+```bash
+starlink-drag ingest gp --start 2025-12-27 --end 2026-09-26
+```
+
+**Crash leftovers.** dlt keeps an interrupted load as a pending package, and a
+plain run afterwards silently loses one of the two batches: sometimes the new
+data (dlt warns *"The data you passed to the run function will not be
+extracted"*), sometimes the leftover. `bronze.run_pipeline` now loads the
+leftover first and then the new data, and refuses to write if anything is still
+pending. If you see that warning in an old log, re-run the window it belonged
+to.
+
+## The build runs out of memory
+
+**Looks like:** `dbt build` fails with `Out of Memory Error: Allocation failure`
+or `failed to pin block of size ... (3.7 GiB/3.7 GiB used)`.
+
+**What protects you now** (ADR-0009): DuckDB is held to 4 GB and spills to
+`data/atlas.duckdb.tmp` beyond it, dbt builds one model at a time, and silver
+has no window over the whole element history -- the one that could not spill,
+the de-duplication, is now an aggregation.
+
+**If it happens anyway:**
+
+1. Close other memory-hungry programs and re-run; nothing is left half-built.
+2. If the machine has memory to give, raise the limit for one build:
 
    ```bash
-   starlink-drag ingest gp --start 2025-12-27 --end 2026-09-26 --window-days 30
+   DUCKDB_MEMORY_LIMIT=8GB uv run dbt build --project-dir transform --profiles-dir transform
    ```
 
-4. Then rebuild: `make build`, or `starlink-drag warehouse sync` followed by
-   `dbt build`.
-
-**And check for a swallowed write.** If the log shows dlt saying *"The pipeline
-`run` method will now load the pending load packages. The data you passed to
-the run function will not be extracted"*, the write that printed it loaded the
-batch left over from the crash **instead of** its own data -- while the asset
-still logged its own row count. Re-run that window. On 2026-09-26 the swallowed
-window had already been landed by the first attempt, so nothing was lost.
-
----
+3. If a *new* model triggered it, find the stage that cannot spill by building
+   each view on its own under the limit. A window over every element set is the
+   usual culprit; rewrite it as a `GROUP BY` where the logic allows, and check
+   the rewrite returns the same rows before trusting it.
 
 ## Duplicate rows after a re-run
 

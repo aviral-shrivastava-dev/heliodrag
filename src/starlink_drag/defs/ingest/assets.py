@@ -8,10 +8,12 @@ CLI calls, so Dagster and cron drive identical code.
 # resolves the `context` parameter's type hint at definition time and rejects a
 # stringified one, so asset modules keep runtime annotations.
 import datetime as dt
+from pathlib import Path
 
 import dagster as dg
 from dagster import AssetExecutionContext
 
+from starlink_drag.config import Settings
 from starlink_drag.defs.partitions import daily_partitions
 from starlink_drag.defs.resources import AtlasSettings
 
@@ -20,9 +22,9 @@ INGEST_GROUP = "bronze"
 SPACETRACK_CONCURRENCY = {"dagster/concurrency_key": "spacetrack"}
 """Space-Track assets share one concurrency slot.
 
-The rate limiter keeps its window in process memory (ADR-0003), so two assets
-fetching at once would each believe they were within the limit while together
-exceeding it. This tag is the enforcement; removing it re-opens that hole.
+The rate limit itself holds across processes now: every request is recorded in
+a ledger all of them share (ADR-0008). The slot still stops two assets from
+competing for the same hourly budget, which would slow both and help neither.
 """
 
 INGEST_RETRY = dg.RetryPolicy(
@@ -35,10 +37,30 @@ INGEST_RETRY = dg.RetryPolicy(
 
 This is the *run-level* retry, above the per-request retry inside the client.
 The client handles a single flaky response; this handles a whole partition
-failing -- an expired session, a network drop mid-backfill, a Space-Track
-outage. Jitter for the same reason as in the client: identical delays would send
-several failed partitions back in lockstep.
+failing -- an expired session, a network drop mid-backfill, an outage. Jitter
+for the same reason as in the client: identical delays would send several
+failed partitions back in lockstep.
 """
+
+SPACETRACK_RETRY = dg.RetryPolicy(
+    max_retries=3,
+    delay=600,
+    backoff=dg.Backoff.EXPONENTIAL,
+    jitter=dg.Jitter.PLUS_MINUS,
+)
+"""The same, but measured in minutes, for the assets that call Space-Track.
+
+A Space-Track step that fails has usually met throttling or an outage, and
+neither clears in thirty seconds. Waiting ten, then twenty, then forty minutes
+lets its rolling hour drain. The retry is also cheap: the element fetch resumes
+from the checkpoint of windows the failed attempt already landed.
+"""
+
+
+def _checkpoint(context: AssetExecutionContext, settings: Settings) -> Path:
+    """Where this run records finished windows. Keyed by run, so a retry --
+    same run, new process -- resumes, and a later run starts afresh."""
+    return settings.data_dir / "checkpoints" / f"gp_history-{context.run_id}.json"
 
 
 def _window(context: AssetExecutionContext) -> tuple[dt.date, dt.date]:
@@ -54,7 +76,7 @@ def _window(context: AssetExecutionContext) -> tuple[dt.date, dt.date]:
 
 @dg.asset(
     group_name=INGEST_GROUP,
-    retry_policy=INGEST_RETRY,
+    retry_policy=SPACETRACK_RETRY,
     op_tags=SPACETRACK_CONCURRENCY,
     description=(
         "Space-Track catalogue snapshot. Unpartitioned by time: it is the "
@@ -107,7 +129,7 @@ def bronze_omni(context: AssetExecutionContext, settings: AtlasSettings) -> dg.M
     group_name=INGEST_GROUP,
     partitions_def=daily_partitions,
     backfill_policy=dg.BackfillPolicy.single_run(),
-    retry_policy=INGEST_RETRY,
+    retry_policy=SPACETRACK_RETRY,
     op_tags=SPACETRACK_CONCURRENCY,
     deps=[bronze_satcat],
     description=(
@@ -128,11 +150,13 @@ def bronze_gp_history(
     objects = norad_ids(resolved, on_orbit_during=(start, end))
     context.log.info(f"{len(objects):,} objects on orbit during {start}..{end}")
 
+    checkpoint = _checkpoint(context, resolved)
     report = ingest_gp(
         resolved,
         start,
         end,
         objects,
+        checkpoint=checkpoint,
         on_progress=context.log.info,
     )
     context.log.info(report.describe())
@@ -146,7 +170,8 @@ def bronze_gp_history(
     if report.has_suspicious_gap:
         # Not a failure Space-Track reports: a throttled request comes back as
         # HTTP 200 with an empty array. Failing here turns a silent hole into a
-        # retry, which the asset's RetryPolicy then handles.
+        # retry, which the asset's RetryPolicy then handles -- re-requesting
+        # only the windows that did not land.
         raise RuntimeError(
             f"{len(report.empty_windows)} window(s) returned no rows while others "
             f"returned {report.rows_written:,}: {', '.join(report.empty_windows)}. "
@@ -154,6 +179,7 @@ def bronze_gp_history(
             "empty success. Re-run the range."
         )
 
+    checkpoint.unlink(missing_ok=True)
     return dg.MaterializeResult(
         metadata={
             "rows": report.rows_written,

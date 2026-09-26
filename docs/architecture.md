@@ -77,9 +77,11 @@ replacing partitions was measured at 200 times slower than appending, so
 duplicates are allowed to land and are collapsed in silver. Load provenance
 lives in a separate audit table, not in the data files.
 
-Locally the lake is a directory under `data/`. The same code writes to MinIO
-(`infra/docker`) or Cloudflare R2 (`infra/terraform`) by changing
-`LAKE_BACKEND`.
+The lake is a directory under `data/`. MinIO (`infra/docker`) and Cloudflare
+R2 (`infra/terraform`) are meant to be reachable by setting `LAKE_BACKEND=r2`,
+but that path is **not wired yet**: the endpoint and keys exist in the settings
+and in docker-compose, and nothing passes them to dlt, pyiceberg or DuckDB. The
+Docker stack starts; the pipeline cannot yet write to it.
 
 ### The bridge into the warehouse — `src/starlink_drag/warehouse.py`
 

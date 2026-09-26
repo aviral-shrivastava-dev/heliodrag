@@ -15,9 +15,8 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
+from starlink_drag.clients.rate_limit import RateLimitWindow, SlidingWindowRateLimiter
 from starlink_drag.clients.spacetrack import (
-    RateLimitWindow,
-    SlidingWindowRateLimiter,
     SpaceTrackAuthError,
     SpaceTrackClient,
     SpaceTrackError,

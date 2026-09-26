@@ -13,8 +13,10 @@ days for many satellites, and the rows are split into daily partitions on write.
 from __future__ import annotations
 
 import datetime as dt
+import json
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 import polars as pl
@@ -25,8 +27,13 @@ from starlink_drag.ingest.bronze import GP_SPEC, land
 from starlink_drag.schemas import gp
 
 DEFAULT_WINDOW_DAYS = 90
-"""Days of epoch per request. Wide enough to keep the request count low, narrow
-enough that one response stays a manageable size in memory."""
+"""Days of epoch per request. The request count depends on how many windows
+there are, not on their width, so wide windows keep it low."""
+
+MAX_ROWS_PER_WRITE = 400_000
+"""Rows collected before they are written. Bounds memory by rows rather than
+by days: at 2025 volumes a 90-day window is about 1.7 million element sets, and
+holding a whole one ran a 16 GB machine out of memory mid-write."""
 
 
 class ElementSource(Protocol):
@@ -105,6 +112,8 @@ def ingest_gp(
     norad_ids: Sequence[int],
     *,
     window_days: int = DEFAULT_WINDOW_DAYS,
+    max_rows_per_write: int = MAX_ROWS_PER_WRITE,
+    checkpoint: Path | None = None,
     client: ElementSource | None = None,
     on_progress: Callable[[str], None] | None = None,
     continue_on_error: bool = True,
@@ -113,21 +122,43 @@ def ingest_gp(
 
     A failing chunk does not abandon the run by default: a backfill spanning
     hours should not lose everything to one bad response. Failures are counted
-    and reported, and the chunk can simply be re-run -- partitions are
-    idempotent.
+    and reported, and the chunk can simply be re-run.
+
+    ``checkpoint`` names a file recording the windows this run has finished.
+    A retry given the same file skips them instead of requesting them again --
+    which matters because every request counts against Space-Track's limit.
     """
     owned = client is None
     spacetrack = client or SpaceTrackClient(settings.spacetrack)
     batch_size = settings.spacetrack.norad_ids_per_request
+    done = _finished_windows(checkpoint)
 
     requests = written = quarantined = failed = 0
     seen_partitions: set[str] = set()
     empty_windows: list[str] = []
 
+    def flush(collected: list[pl.DataFrame]) -> int:
+        nonlocal written, quarantined
+        # Written in chunks of about MAX_ROWS_PER_WRITE, not one write per
+        # batch: a write costs time per *partition touched*, and every batch
+        # touches every day of the window. See docs/phases/phase-1.md.
+        combined = pl.concat(collected).sort(["norad_id", "epoch", "gp_id"])
+        outcome = land(combined, GP_SPEC, settings, schema=gp.schema, source=gp.SOURCE)
+        written += outcome.rows_written
+        quarantined += outcome.rows_quarantined
+        seen_partitions.update(outcome.partitions)
+        return outcome.rows_written
+
     try:
         for window_start, window_end in windows(start, end, window_days):
             label = f"{window_start}..{window_end}"
+            if label in done:
+                if on_progress:
+                    on_progress(f"  {label} -> landed by an earlier attempt of this run; skipped")
+                continue
+
             collected: list[pl.DataFrame] = []
+            pending = fetched = landed = window_failures = 0
 
             for batch in batched(list(norad_ids), batch_size):
                 requests += 1
@@ -135,6 +166,7 @@ def ingest_gp(
                     rows = spacetrack.gp_history(batch, window_start, window_end)
                 except Exception as error:
                     failed += 1
+                    window_failures += 1
                     if on_progress:
                         on_progress(
                             f"  FAILED {label} x{len(batch)}: {type(error).__name__}: {error}"
@@ -142,39 +174,31 @@ def ingest_gp(
                     if not continue_on_error:
                         raise
                     continue
-                collected.append(gp.to_frame(rows))
+                frame = gp.to_frame(rows)
+                fetched += frame.height
+                if frame.height:
+                    collected.append(frame)
+                    pending += frame.height
+                if pending >= max_rows_per_write:
+                    landed += flush(collected)
+                    collected, pending = [], 0
 
-            if not collected:
-                empty_windows.append(label)
-                continue
-
-            # One write per window, not one per batch. Writing costs roughly a
-            # second and a half per *partition touched*, almost regardless of
-            # row count, so landing each batch separately rewrites every day in
-            # the window once per batch. For a year that is ~12,800 partition
-            # writes instead of 366 -- hours instead of minutes. Measured, not
-            # guessed; the numbers are in docs/phases/phase-1.md.
-            combined = pl.concat(collected).sort(["norad_id", "epoch", "gp_id"])
+            if collected:
+                landed += flush(collected)
 
             # Every request in the window succeeded and returned nothing.
             # Space-Track answers a throttled request with HTTP 200 and an
             # empty array, so this is recorded rather than shrugged at.
-            if combined.is_empty():
+            if fetched == 0:
                 empty_windows.append(label)
                 if on_progress:
-                    on_progress(f"  {label} -> EMPTY: {requests} requests, no rows")
+                    on_progress(f"  {label} -> EMPTY: no rows returned")
                 continue
 
-            outcome = land(combined, GP_SPEC, settings, schema=gp.schema, source=gp.SOURCE)
-
-            written += outcome.rows_written
-            quarantined += outcome.rows_quarantined
-            seen_partitions.update(outcome.partitions)
             if on_progress:
-                on_progress(
-                    f"  {label} -> {outcome.rows_written:,} rows, "
-                    f"{len(outcome.partitions)} partitions"
-                )
+                on_progress(f"  {label} -> {landed:,} rows")
+            if window_failures == 0:
+                _record_finished(checkpoint, label)
     finally:
         if owned:
             spacetrack.close()
@@ -187,3 +211,21 @@ def ingest_gp(
         chunks_failed=failed,
         empty_windows=tuple(empty_windows),
     )
+
+
+def _finished_windows(checkpoint: Path | None) -> set[str]:
+    if checkpoint is None or not checkpoint.exists():
+        return set()
+    return set(json.loads(checkpoint.read_text(encoding="utf-8")))
+
+
+def _record_finished(checkpoint: Path | None, label: str) -> None:
+    """Add a window to the checkpoint, atomically: a crash mid-write must not
+    leave a file that makes the next attempt skip a window it never landed."""
+    if checkpoint is None:
+        return
+    finished = sorted(_finished_windows(checkpoint) | {label})
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    temporary = checkpoint.with_suffix(".tmp")
+    temporary.write_text(json.dumps(finished), encoding="utf-8")
+    temporary.replace(checkpoint)

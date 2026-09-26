@@ -11,10 +11,22 @@ starlink_drag:
     dev:
       type: duckdb
       path: "{{ env_var('DUCKDB_PATH', 'data/atlas.duckdb') }}"
-      threads: 4
+      # One model at a time, so each gets the whole memory budget below. DuckDB
+      # already parallelises inside each query; four dbt threads made four heavy
+      # queries share one budget.
+      threads: 1
       extensions:
         - httpfs
         - parquet
+      settings:
+        # DuckDB assumes it may use 80% of RAM and spills to disk only past its
+        # own limit. On a laptop with other programs open, the operating system
+        # runs out first: on 2026-09-26, with ~30M element sets, three tests on
+        # int_decay__daily_rates failed with "Out of Memory Error: Allocation
+        # failure" while 12 GB was nominally allowed and 4.5 GB was free. An
+        # honest limit makes DuckDB spill to data/atlas.duckdb.tmp instead --
+        # for what can spill; see int_gp__deduplicated for what could not.
+        memory_limit: "{{ env_var('DUCKDB_MEMORY_LIMIT', '4GB') }}"
 
     ci:
       # Ephemeral database seeded from tests/fixtures; never the real warehouse.

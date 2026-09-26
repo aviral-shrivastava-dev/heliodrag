@@ -17,6 +17,7 @@ from dagster import AssetExecutionContext
 from starlink_drag.defs.ingest.assets import (
     INGEST_RETRY,
     SPACETRACK_CONCURRENCY,
+    SPACETRACK_RETRY,
     bronze_gp_history,
     bronze_omni,
     bronze_satcat,
@@ -134,16 +135,21 @@ def test_ingestion_retries_with_exponential_backoff_and_jitter() -> None:
     assert INGEST_RETRY.backoff == dg.Backoff.EXPONENTIAL
     assert INGEST_RETRY.jitter == dg.Jitter.PLUS_MINUS
 
-    for asset in (bronze_satcat, bronze_omni, bronze_gp_history):
-        policy = asset.op.retry_policy
-        assert policy is not None, asset.key
-        assert policy.max_retries == 3, asset.key
+    assert bronze_omni.op.retry_policy == INGEST_RETRY
+
+
+def test_space_track_steps_wait_minutes_before_retrying() -> None:
+    """A failed Space-Track step has usually met throttling or an outage;
+    retrying in thirty seconds only asks again inside the same rolling hour."""
+    assert SPACETRACK_RETRY.delay is not None and SPACETRACK_RETRY.delay >= 600
+    assert SPACETRACK_RETRY.max_retries == 3
+    for asset in (bronze_satcat, bronze_gp_history):
+        assert asset.op.retry_policy == SPACETRACK_RETRY, asset.key
 
 
 def test_space_track_assets_share_one_concurrency_slot() -> None:
-    """The rate limiter's window is per-process (ADR-0003), so two Space-Track
-    assets running at once would together exceed a limit each believed it was
-    within."""
+    """The limit itself is shared through the ledger (ADR-0008); the slot stops
+    two assets competing for one hourly budget."""
     assert SPACETRACK_CONCURRENCY == {"dagster/concurrency_key": "spacetrack"}
 
     for asset in (bronze_satcat, bronze_gp_history):

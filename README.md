@@ -150,12 +150,12 @@ publishable; the element-level data behind them is not.
 | Packaging | uv, `src/` layout, committed `uv.lock` | Reproducible installs fast enough to run on every CI push ([ADR-0001](docs/adr/0001-packaging-with-uv.md)) |
 | Ingestion | httpx clients + dlt | The clients own rate limiting and retries, which must be exact; dlt owns the write, which should be boring |
 | Validation | Pandera, with a quarantine table | A bad row is kept with its reason, not dropped silently or loaded silently |
-| Lake | Apache Iceberg on Parquet | Snapshots make "which files are current" a fact rather than a directory listing; the same code writes to local disk, MinIO or R2 |
+| Lake | Apache Iceberg on Parquet, on local disk | Snapshots make "which files are current" a fact rather than a directory listing. Written for S3-compatible storage too, but that path is not wired yet (see known limits) |
 | Engine | DuckDB + Polars | The whole dataset is a few gigabytes. A single process is faster, cheaper and easier to reason about than a cluster |
 | Transformation | dbt-core + dbt-duckdb | Versioned, tested SQL with lineage a reviewer can read; 84 tests on every build |
 | Orchestration | Dagster | Partitioned assets make backfills and per-day idempotency the default, not a convention ([ADR-0002](docs/adr/0002-dagster-over-airflow.md)) |
 | Serving | Streamlit + Altair | Reads gold marts only, through connections that never block a build ([ADR-0006](docs/adr/0006-explorer-reads-gold-through-short-lived-connections.md)) |
-| Infrastructure | Terraform (Cloudflare R2), docker-compose (MinIO + Dagster) | The production lake, and a local stack that speaks the same S3 API |
+| Infrastructure | Terraform (Cloudflare R2), docker-compose (MinIO + Dagster) | The intended production lake, and a local stack to rehearse it; both start, neither is yet written to by the pipeline |
 | CI | GitHub Actions | Tests and a real dbt build on every push; a nightly check that the upstream APIs have not changed shape |
 
 ## Monthly cost
@@ -178,8 +178,10 @@ applied: that needs a Cloudflare account and token.
 **Trade-offs made on purpose**
 
 - **One machine, not a cluster.** DuckDB comfortably handles the few gigabytes
-  this dataset occupies. The ceiling is roughly the laptop's disk; well before
-  that, the next step would be a hosted DuckDB or Trino, not Spark.
+  this dataset occupies, held to a 4 GB memory budget and spilling to disk
+  beyond it ([ADR-0009](docs/adr/0009-bounded-memory-warehouse-build.md)). The
+  ceiling is roughly the laptop's disk; well before that, the next step would be
+  a hosted DuckDB or Trino, not Spark.
 - **Bronze appends; silver deduplicates.** Replacing partitions in Iceberg was
   measured at two hundred times slower than appending
   ([ADR-0005](docs/adr/0005-bronze-appends-rather-than-replaces.md)). The price is
@@ -196,15 +198,19 @@ applied: that needs a Cloudflare account and token.
 
 **Known limits**
 
-- The rate limiter counts one process's requests. Dagster runs the catalogue
-  and element fetches as separate processes, so two heavy runs back to back
-  could together exceed Space-Track's hourly limit. Leave an hour between them
+- The rate limit is enforced per machine. Every process on it shares one
+  ledger of recent requests, so retries and parallel runs cannot exceed it
+  ([ADR-0008](docs/adr/0008-rate-limit-shared-across-processes-and-resumable-fetch.md)),
+  but it cannot see requests from another machine on the same account. The
+  defaults leave headroom for the nightly check on GitHub; ingestion on two
+  machines would need its budget split
   ([runbook](docs/runbook.md#rate-limit-exhaustion)).
-- The element fetch holds a whole window in memory, and at 2025 volumes a 90-day
-  window no longer fits on a laptop. When it failed, Dagster's retry re-ran the
-  step as a new process and breached Space-Track's hourly limit. Until that is
-  fixed, land large ranges with `starlink-drag ingest gp --window-days 30`
-  ([runbook](docs/runbook.md#the-run-died-of-memory-and-its-retry-made-things-worse)).
+- **Only the local lake works.** `LAKE_BACKEND=r2` is meant to point the
+  pipeline at Cloudflare R2, or at MinIO from `infra/docker`, but the endpoint
+  and keys are never passed to the code that reads and writes the lake. The
+  Docker stack and the Terraform configuration both start and validate; nothing
+  has yet been written through them. Phase 4 checked that they start, not that
+  data flows, and this was found on 2026-09-26.
 - DuckDB 1.5.5 was found to build one mart from a fraction of its input inside
   `CREATE TABLE AS`. The model now avoids the pattern that triggers it, and a
   dedicated test would catch a recurrence ([runbook](docs/runbook.md#checks-that-are-failing)).
@@ -215,10 +221,9 @@ applied: that needs a Cloudflare account and token.
   space-weather forcing with bootstrap confidence intervals, conditioned on
   altitude shell, date and manoeuvring, and a superposed-epoch comparison of
   storm responses.
-- Deploy the lake to R2 and move the nightly ingest onto it.
-- Before any more ingestion: a rate limiter shared between processes; bounded
-  memory in the element fetch; no automatic retry that re-requests landed
-  windows; and handling of dlt batches left behind by a crash.
+- Wire the S3 path -- endpoint and keys through to dlt, pyiceberg and DuckDB --
+  prove it end to end against MinIO in Docker, then deploy the lake to R2 and
+  move the nightly ingest onto it.
 - A minimal, shareable reproduction of the DuckDB bug for the DuckDB project.
 - A hosted, aggregates-only explorer, which would be publishable.
 - Phase 6, a streaming drag nowcast, is optional and not planned: nothing in

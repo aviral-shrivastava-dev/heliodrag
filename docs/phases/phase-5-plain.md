@@ -179,11 +179,12 @@ Everything else:
 
 ## What is still open
 
-- Fixing the collection so that crash cannot happen again: a speed limiter
-  shared between programs, collecting in smaller pieces, no automatic retry that
-  asks for the same data twice, and dealing with crash leftovers. These belong
-  to the collection part of the project, so they will be reviewed separately.
-  Until then, data after 26 December 2025 is not collected.
+- The collection has since been fixed so that crash cannot happen again: every
+  program on the computer now shares one record of requests, so the speed
+  limit holds however many are running; data is saved in smaller pieces; a
+  retry picks up where the failed attempt stopped instead of starting over; and
+  crash leftovers are saved properly instead of lost. That was its own change,
+  reviewed separately.
 
 - Why exactly the database program dropped the data. It has been worked around
   and guarded against, but a demonstration simple enough to send to its authors

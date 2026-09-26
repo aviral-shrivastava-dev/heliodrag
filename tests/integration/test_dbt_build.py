@@ -117,3 +117,38 @@ def test_a_duplicated_bronze_row_does_not_reach_the_marts(
     decay = table(seeded_warehouse, "fct_daily_decay")
     keys = decay.select(["norad_id", "epoch_date"])
     assert keys.height == keys.unique().height, "duplicates reached the mart"
+
+
+def test_a_correction_replaces_the_whole_element_set(
+    seeded_warehouse: Path, tmp_path: Path
+) -> None:
+    """Space-Track corrects an element set by publishing a new gp_id for the
+    same epoch. The whole correction must win -- including a value it leaves
+    NULL. Deduplication is an aggregation (arg_max_null per column, because a
+    window over the full history did not fit in memory); plain arg_max would
+    skip the NULL and stitch the old bstar onto the new element set."""
+    with duckdb.connect(str(seeded_warehouse)) as con:
+        norad, epoch, gp_id = con.execute(
+            "select norad_id, epoch, gp_id from bronze.gp_history order by norad_id, epoch limit 1"
+        ).fetchone() or (None, None, None)
+        con.execute(
+            """
+            insert into bronze.gp_history
+            select * replace (gp_id + 1000000 as gp_id, 15.5 as mean_motion,
+                              cast(null as double) as bstar)
+            from bronze.gp_history where norad_id = ? and epoch = ?
+            """,
+            [norad, epoch],
+        )
+
+    result = run_dbt(seeded_warehouse, tmp_path)
+    assert result.returncode == 0, result.stdout[-4000:]
+
+    with duckdb.connect(str(seeded_warehouse), read_only=True) as con:
+        rows = con.execute(
+            "select gp_id, mean_motion_rev_per_day, bstar from int_gp__deduplicated "
+            "where norad_id = ? and epoch_at = ?",
+            [norad, epoch],
+        ).fetchall()
+
+    assert rows == [(gp_id + 1000000, 15.5, None)]

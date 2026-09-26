@@ -25,6 +25,7 @@ from starlink_drag.ingest.bronze import (
     QUARANTINE_TABLE,
     lake_root,
     land,
+    make_pipeline,
     partition_digest,
     read_table,
     write,
@@ -209,3 +210,40 @@ def test_no_wall_clock_column_reaches_the_data_files(settings: Settings) -> None
     rows = read_table(settings, OMNI_SPEC.table, row_filter="epoch_date = '2024-05-10'")
     assert rows.columns == list(omni.BRONZE_COLUMNS)
     assert not any("ingest" in c or c.startswith("_dlt") for c in rows.columns)
+
+
+# -- a load that crashed -----------------------------------------------------
+
+
+def _crash_mid_load(frame: pl.DataFrame, settings: Settings) -> None:
+    """Extract and normalise without loading: the state an out-of-memory crash
+    during the load step leaves behind."""
+    import dlt
+
+    pipeline = make_pipeline(OMNI_SPEC.table, settings)
+    pipeline.extract(
+        dlt.resource(
+            frame.to_arrow(),
+            name=OMNI_SPEC.table,
+            write_disposition="append",
+            columns={OMNI_SPEC.partition_column: {"partition": True}},
+        ),
+        table_format="iceberg",
+        loader_file_format="parquet",
+    )
+    pipeline.normalize()
+    assert pipeline.has_pending_data, "the stand-in crash should leave a pending package"
+
+
+def test_a_batch_left_by_a_crash_does_not_swallow_the_next_write(settings: Settings) -> None:
+    """After a crash, a plain dlt run silently loses one of two batches. Here,
+    with the leftover prepared but never loaded, it is the leftover that
+    vanishes; in the 2026-09-26 incident it was the new data. Removing the
+    handling in bronze.run_pipeline makes this test fail. Both must land."""
+    _crash_mid_load(_frame("2024-05-10"), settings)
+
+    write(_frame("2024-05-11"), OMNI_SPEC, settings)
+
+    days = read_table(settings, OMNI_SPEC.table)["epoch_date"].unique().sort().to_list()
+    assert [str(day) for day in days] == ["2024-05-10", "2024-05-11"]
+    assert not make_pipeline(OMNI_SPEC.table, settings).has_pending_data

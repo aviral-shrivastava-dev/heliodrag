@@ -2,9 +2,7 @@
 
 Plain-language version: [phase-5-plain.md](phase-5-plain.md).
 
-**Status:** complete, 2026-09-26. The data behind it runs to 2025-12-26; the
-rest waits on ingestion fixes described under
-[What is genuinely unresolved](#what-is-genuinely-unresolved).
+**Status:** complete, 2026-09-26.
 
 ## What this phase is for
 
@@ -152,8 +150,8 @@ restarted the step as a new process, with a new rate limiter, from the start of
 the range: about 350 requests in half an hour against a limit of 300 an hour.
 Space-Track answered with empty windows, and the run was stopped by hand. This
 breached a hard constraint of the project. It is recorded here and in the
-runbook rather than smoothed over, and no further Space-Track request has been
-made since.
+runbook rather than smoothed over, and Space-Track was not contacted again
+until the fixes in ADR-0008 were in place.
 
 The same retry showed a third problem: after a crash, dlt's next write loads
 the leftover batch **instead of** the data it was given, while the asset logs
@@ -195,12 +193,12 @@ uv run starlink-drag demo                       # the acceptance path
 
 ## What is genuinely unresolved
 
-- **The ingestion fixes the backfill exposed are not made yet**, because they
-  belong to the ingestion layer rather than to this phase and should be
-  reviewed on their own: a rate limiter shared between processes, bounded memory
-  in the element fetch, no automatic retry that re-requests landed windows, and
-  explicit handling of batches dlt leaves behind after a crash. Until then, the
-  runbook's workaround applies, and 2025-12-27 onwards is not landed.
+- **The ingestion fixes the backfill exposed** were made straight after this
+  phase, as their own change: a rate limiter shared by every process on the
+  machine, writes bounded by rows, retries that resume from a per-run
+  checkpoint, and crash leftovers loaded rather than traded for new data
+  ([ADR-0008](../adr/0008-rate-limit-shared-across-processes-and-resumable-fetch.md)).
+  The limiter still cannot see requests from another machine on the account.
 
 - **Why DuckDB drops the rows.** The workaround and the guard are in place, but
   a shareable reproduction -- the only kind DuckDB's maintainers can use -- has

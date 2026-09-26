@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 import itertools
+import json
 from collections.abc import Sequence
 from typing import Any
 
@@ -331,3 +332,104 @@ def test_an_entirely_empty_run_is_not_called_suspicious(
     assert report.rows_written == 0
     assert report.empty_windows
     assert not report.has_suspicious_gap
+
+
+# -- bounded memory --------------------------------------------------------
+
+
+def test_writes_are_bounded_by_rows_not_by_the_window(
+    tmp_path: Any, landings: list[pl.DataFrame]
+) -> None:
+    """A 90-day window of 2025's constellation ran a 16 GB machine out of
+    memory. Writes now happen whenever enough rows are collected."""
+    ingest_gp(
+        _settings(tmp_path, batch_size=2),
+        dt.date(2024, 1, 1),
+        dt.date(2024, 1, 11),
+        [1, 2, 3, 4, 5, 6],  # 3 batches x 2 satellites x 10 days = 20 rows each
+        window_days=10,
+        max_rows_per_write=30,
+        client=FakeSpaceTrack(),
+    )
+
+    assert [frame.height for frame in landings] == [40, 20]
+
+
+def test_a_small_window_is_still_one_write(tmp_path: Any, landings: list[pl.DataFrame]) -> None:
+    """The budget only splits windows that exceed it; small ones keep one write."""
+    ingest_gp(
+        _settings(tmp_path, batch_size=2),
+        dt.date(2024, 1, 1),
+        dt.date(2024, 1, 11),
+        [1, 2, 3, 4, 5, 6],
+        window_days=10,
+        client=FakeSpaceTrack(),
+    )
+
+    assert [frame.height for frame in landings] == [60]
+
+
+# -- resuming a retry ------------------------------------------------------
+
+
+def test_a_retry_skips_the_windows_the_failed_attempt_landed(
+    tmp_path: Any, landings: list[pl.DataFrame]
+) -> None:
+    """On 2026-09-26 a retry re-requested every window from the start of the
+    range. Each request counts against Space-Track's limit; landed windows must
+    not be fetched twice by the same run."""
+    checkpoint = tmp_path / "checkpoint.json"
+    arguments: dict[str, Any] = {
+        "settings": _settings(tmp_path, batch_size=2),
+        "start": dt.date(2024, 1, 1),
+        "end": dt.date(2024, 1, 7),
+        "norad_ids": [1, 2, 3, 4],
+        "window_days": 3,
+        "checkpoint": checkpoint,
+        "continue_on_error": False,
+    }
+    # Window 1 is calls 1 and 2; the third call, in window 2, fails.
+    with pytest.raises(RuntimeError):
+        ingest_gp(**arguments, client=FakeSpaceTrack(fail_on={3}))
+
+    retry = FakeSpaceTrack()
+    ingest_gp(**arguments, client=retry)
+
+    assert {start for _, start, _ in retry.calls} == {dt.date(2024, 1, 4)}
+
+
+def test_a_window_with_a_failed_batch_is_not_recorded_as_finished(
+    tmp_path: Any, landings: list[pl.DataFrame]
+) -> None:
+    checkpoint = tmp_path / "checkpoint.json"
+
+    ingest_gp(
+        _settings(tmp_path, batch_size=2),
+        dt.date(2024, 1, 1),
+        dt.date(2024, 1, 7),
+        [1, 2, 3, 4],
+        window_days=3,
+        checkpoint=checkpoint,
+        client=FakeSpaceTrack(fail_on={1}),
+    )
+
+    assert json.loads(checkpoint.read_text(encoding="utf-8")) == ["2024-01-04..2024-01-07"]
+
+
+def test_an_empty_window_is_not_recorded_as_finished(
+    tmp_path: Any, landings: list[pl.DataFrame]
+) -> None:
+    """Empty is what throttling looks like, so a retry must ask again."""
+    checkpoint = tmp_path / "checkpoint.json"
+
+    ingest_gp(
+        _settings(tmp_path, batch_size=2),
+        dt.date(2024, 1, 1),
+        dt.date(2024, 1, 4),
+        [1, 2],
+        window_days=3,
+        checkpoint=checkpoint,
+        client=EmptySpaceTrack(empty_after=0),
+    )
+
+    assert not checkpoint.exists()

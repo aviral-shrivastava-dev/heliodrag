@@ -1,10 +1,10 @@
 """Space-Track.org client.
 
-This is the only module that talks to Space-Track, and the only place a rate
-limiter for it exists. Space-Track publishes two simultaneous limits -- fewer
-than 30 requests per minute and fewer than 300 per hour -- and enforces them by
-blocking accounts, so the limiter is not advisory and is applied before the
-request leaves, not after a rejection comes back.
+This is the only module that talks to Space-Track. Every request it sends --
+login included -- first passes the rate limiter in ``rate_limit``, whose record
+of recent requests is shared by every process on the machine. Space-Track
+enforces its limits by blocking accounts, so the limiter is not advisory and is
+applied before the request leaves, not after a rejection comes back.
 
 Data obtained here is covered by a US-government data-use agreement that does
 not permit redistribution. Nothing fetched by this module may be committed.
@@ -15,14 +15,18 @@ from __future__ import annotations
 import datetime as dt
 import random
 import time
-from collections import deque
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Self
 
 import httpx
 
+from starlink_drag.clients.rate_limit import (
+    MemoryLedger,
+    RateLimitWindow,
+    SlidingWindowRateLimiter,
+    SqliteLedger,
+)
 from starlink_drag.config import SpaceTrackSettings
 
 _RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
@@ -36,84 +40,6 @@ class SpaceTrackError(RuntimeError):
 
 class SpaceTrackAuthError(SpaceTrackError):
     """Credentials were missing, rejected, or the session expired."""
-
-
-@dataclass(frozen=True, slots=True)
-class RateLimitWindow:
-    """At most ``limit`` requests may start within any ``seconds``-long window."""
-
-    limit: int
-    seconds: float
-
-    def __post_init__(self) -> None:
-        if self.limit < 1 or self.seconds <= 0:
-            raise ValueError("a rate-limit window needs a positive limit and duration")
-
-
-class SlidingWindowRateLimiter:
-    """Enforces several rolling-window limits at once.
-
-    A token bucket sized to the limit is the more common choice, but it permits
-    a full burst at the end of one window and another at the start of the next
-    -- up to twice the published limit inside a single rolling window, which is
-    exactly the pattern that gets a Space-Track account blocked.
-
-    This keeps the start time of recent requests instead, and waits until the
-    oldest one has aged out of every window. It cannot exceed a rolling limit by
-    construction, and still allows a genuine burst when the window really is
-    clear. See ADR-0003.
-
-    The clock and sleep function are injected so tests can drive it in
-    microseconds rather than minutes.
-    """
-
-    def __init__(
-        self,
-        windows: Sequence[RateLimitWindow],
-        *,
-        clock: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], None] = time.sleep,
-    ) -> None:
-        if not windows:
-            raise ValueError("at least one window is required")
-        self._windows = tuple(windows)
-        self._clock = clock
-        self._sleep = sleep
-        self._starts: deque[float] = deque()
-        self._capacity = max(w.limit for w in self._windows)
-
-    def _wait_needed(self, now: float) -> float:
-        """Seconds to wait before another request may start, 0 if none."""
-        wait = 0.0
-        for window in self._windows:
-            cutoff = now - window.seconds
-            in_window = [t for t in self._starts if t > cutoff]
-            if len(in_window) >= window.limit:
-                # The oldest request that must age out before there is room.
-                oldest = in_window[-window.limit]
-                wait = max(wait, oldest + window.seconds - now)
-        return wait
-
-    def acquire(self) -> float:
-        """Block until a request may start. Returns how long it waited."""
-        waited = 0.0
-        while True:
-            now = self._clock()
-            self._prune(now)
-            wait = self._wait_needed(now)
-            if wait <= 0:
-                self._starts.append(now)
-                if len(self._starts) > self._capacity:
-                    self._starts.popleft()
-                return waited
-            self._sleep(wait)
-            waited += wait
-
-    def _prune(self, now: float) -> None:
-        longest = max(w.seconds for w in self._windows)
-        cutoff = now - longest
-        while self._starts and self._starts[0] <= cutoff:
-            self._starts.popleft()
 
 
 def batched(items: Sequence[int], size: int) -> Iterator[list[int]]:
@@ -142,7 +68,8 @@ class SpaceTrackClient:
         settings: SpaceTrackSettings,
         *,
         client: httpx.Client | None = None,
-        clock: Callable[[], float] = time.monotonic,
+        ledger: MemoryLedger | SqliteLedger | None = None,
+        clock: Callable[[], float] = time.time,
         sleep: Callable[[float], None] = time.sleep,
         jitter: Callable[[], float] = random.random,
     ) -> None:
@@ -155,6 +82,7 @@ class SpaceTrackClient:
                 RateLimitWindow(settings.requests_per_minute, 60.0),
                 RateLimitWindow(settings.requests_per_hour, 3600.0),
             ],
+            ledger=ledger or SqliteLedger(settings.ledger_path),
             clock=clock,
             sleep=sleep,
         )
