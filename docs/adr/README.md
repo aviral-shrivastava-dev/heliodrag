@@ -43,3 +43,4 @@ consequences is not finished.
 | [0012](0012-move-a-lake-by-rewriting-it.md) | A lake moves between storage backends by being rewritten, not copied | accepted |
 | [0013](0013-optional-streaming-path-on-redpanda.md) | An optional streaming path on Redpanda, with the topic as its only state | accepted |
 | [0014](0014-swpc-for-live-space-weather.md) | The live path takes space weather from NOAA SWPC, not OMNI | accepted |
+| [0015](0015-analysis-outputs-are-pinned-committed-and-byte-reproducible.md) | Analysis outputs are pinned, committed, and reproducible byte for byte | accepted |

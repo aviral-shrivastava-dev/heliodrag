@@ -43,6 +43,7 @@ serve = ["dagster-webserver>=1.9"]
 dev = [
     { include-group = "serve" },
     { include-group = "stream" },
+    { include-group = "analysis" },
     "mypy>=1.13",
     "pre-commit>=4.0",
     "pytest>=8.3",
@@ -52,6 +53,10 @@ dev = [
 ]
 stream = [
     "confluent-kafka>=2.6",
+]
+analysis = [
+    "matplotlib>=3.9",
+    "numpy>=2.0",
 ]
 
 [build-system]
@@ -82,6 +87,10 @@ select = [
     "RUF",
 ]
 
+[tool.ruff.lint.isort]
+# `src` above makes packages *inside* analysis/ first-party, not analysis itself.
+known-first-party = ["starlink_drag", "analysis", "tests"]
+
 [tool.ruff.lint.per-file-ignores]
 # SIM117: `with client: with pytest.raises(...)` reads better nested than
 # combined -- the two contexts mean different things and combining them hides
@@ -90,8 +99,7 @@ select = [
 
 [tool.mypy]
 python_version = "3.12"
-# analysis/ joins this list in Phase 7, when it first contains modules.
-files = ["src", "tests", "app"]
+files = ["src", "tests", "app", "analysis"]
 strict = true
 # Third-party packages in this stack ship partial or absent type information.
 # We keep our own code strict and stop at the boundary.

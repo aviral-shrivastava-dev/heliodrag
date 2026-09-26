@@ -1,0 +1,60 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, or the derived figures and tables it publishes,
+  please cite it as below. Please also cite the data sources in `references`.
+type: software
+title: "Starlink Differential Drag Atlas"
+abstract: >-
+  A reproducible pipeline and analysis testing whether Starlink hardware
+  generations (v1.0, v1.5, v2-mini, v2-mini DTC, and v2-mini-opt) show
+  distinguishable orbital-decay sensitivity to the same space-weather forcing
+  over Solar Cycle 25, 2020-2026. Storm responses are measured against each
+  satellite's own pre-storm baseline, within altitude shells, excluding
+  orbit-raising, with storm-level bootstrap confidence intervals. Raw
+  Space-Track data is not redistributed; derived aggregates and all code are.
+authors:
+  - given-names: Aviral
+    family-names: Shrivastava
+repository-code: "https://github.com/aviral-shrivastava-dev/heliodrag"
+license: MIT
+version: 0.1.0
+keywords:
+  - Starlink
+  - satellite drag
+  - thermosphere
+  - geomagnetic storms
+  - space weather
+  - Solar Cycle 25
+  - superposed epoch analysis
+  - data engineering
+references:
+  - type: data
+    title: "General perturbations element sets (GP and GP history)"
+    authors:
+      - name: "United States Space Force, 18th and 19th Space Defense Squadrons"
+    url: "https://www.space-track.org"
+    notes: >-
+      Accessed through Space-Track.org under its user agreement. Not
+      redistributed by this project.
+  - type: data
+    title: "OMNI 2 hourly merged data (OMNI2_H0_MRG1HR)"
+    authors:
+      - family-names: King
+        given-names: Joseph H.
+      - family-names: Papitashvili
+        given-names: Natalia E.
+    url: "https://omniweb.gsfc.nasa.gov/"
+    notes: "Retrieved through the NASA SPDF HAPI server. Public domain."
+  - type: data
+    title: "General Catalog of Artificial Space Objects (GCAT)"
+    authors:
+      - family-names: McDowell
+        given-names: Jonathan C.
+    url: "https://planet4589.org/space/gcat/"
+    notes: "Source of the hardware-generation labels. CC-BY."
+  - type: data
+    title: "Space Weather Prediction Center real-time products"
+    authors:
+      - name: "NOAA Space Weather Prediction Center"
+    url: "https://www.swpc.noaa.gov/"
+    notes: "Used only by the optional live nowcast, not by the analysis. Public domain."

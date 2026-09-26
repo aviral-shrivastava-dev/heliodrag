@@ -82,6 +82,32 @@ statistical comparison (Phase 7) can condition on them openly. The explorer
 shows the data; it does not answer the question. As of September 2026 no
 published study found answers it either: [related work](docs/research/related-work.md).
 
+## What the analysis found
+
+Each operational satellite is compared with itself: its altitude rate in the
+two days after a storm's peak, minus its own rate in the quiet days before,
+within one altitude shell, on storms the generations shared. 316,485
+satellite-storm responses from 80 storms, with 95% intervals from resampling
+storms ([Phase 7](docs/phases/phase-7.md)).
+
+- **One pair is distinguishable, in the direction physics predicts.** At
+  475 km, v2-mini-opt falls faster in storms than v2-mini, by 33 m/day per
+  100 nT of Dst (interval 26 to 67) on the same 27 storms; Holm-adjusted
+  p = 0.007 across seven comparisons. It has a third more area per kilogram.
+- **v1.0 and v1.5 are not distinguishable**, as their near-identical area per
+  kilogram predicts. Most other pairs have too few shared storms to tell.
+- **It is a finding, not a settled one.** The direction holds under every
+  window tested; its significance does not survive a one-day response window.
+  It rests on 27 storms, and a cross-check on satellites no longer holding
+  their altitude agrees only where that check is valid (325-450 km).
+- **The naive comparison is backwards**, ranking the generation with the least
+  area per kilogram as the most sensitive -- which is why the controls exist.
+
+![Within-shell contrasts in storm sensitivity between generations, on shared storms, with 95% intervals; only the 475 km v2-mini against v2-mini-opt contrast excludes zero](analysis/figures/fig4_generation_contrasts.png)
+
+Every figure and table regenerates byte for byte from the gold marts with
+`uv run python -m analysis.make_figures`.
+
 ## Run it locally
 
 You need [uv](https://docs.astral.sh/uv/getting-started/installation/), git,
@@ -280,10 +306,12 @@ applied: that needs a Cloudflare account and token.
 
 **Future work**
 
-- **Phase 7, the analysis:** a per-generation regression of decay on
-  space-weather forcing with bootstrap confidence intervals, conditioned on
-  altitude shell, date and manoeuvring, and a superposed-epoch comparison of
-  storm responses.
+- **More storms for v2-mini-opt**, the newest and largest generation: its
+  475 km result rests on 27, and its 525-550 km estimates on about 20. Extending
+  the pinned period is a one-line change with a reviewed diff.
+- **From sensitivity to density:** converting the responses to thermospheric
+  density needs each generation's drag area in the attitude it flies, which is
+  not public.
 - Deploy the lake to R2 -- the code path is already tested against SeaweedFS -- and
   move the nightly ingest onto it.
 - A minimal, shareable reproduction of the DuckDB bug for the DuckDB project.
@@ -304,7 +332,8 @@ src/starlink_drag/
   stream/    the optional streaming path: producer, consumer, nowcast
 transform/   the dbt project: staging -> intermediate -> marts
 app/         the Streamlit explorer: layout only; pages/ holds the live nowcast
-analysis/    notebooks and figures (Phase 7); never imported by src/
+analysis/    the Phase 7 analysis: models/, plots, make_figures; figures/ is committed
+             output. Reads gold marts only; never imported by src/
 infra/       Terraform for R2, docker-compose for SeaweedFS, Dagster and Redpanda
 ```
 
@@ -320,6 +349,10 @@ weather, used by the live nowcast, are public domain.
 Generation labels derive from Jonathan McDowell's
 [GCAT](https://planet4589.org/space/gcat/) (CC-BY).
 
+What exactly is published, what is not, and how to rebuild the rest:
+[DATA_AVAILABILITY.md](DATA_AVAILABILITY.md). How to cite the work and its
+sources: [CITATION.cff](CITATION.cff).
+
 ## Build order
 
 | Phase | Scope | State |
@@ -330,8 +363,8 @@ Generation labels derive from Jonathan McDowell's
 | 3 | Orchestration: partitioned Dagster assets, asset checks, CLI parity | done |
 | 4 | Hardening: coverage, integration tests, nightly CI, runbook, Terraform | done |
 | 5 | Serving: Streamlit explorer, this README, published dbt docs | done |
-| 6 | Streaming (optional): Redpanda, a live per-generation drag nowcast | **done** |
-| 7 | Analysis: per-generation regression with bootstrap CIs, figures | next |
+| 6 | Streaming (optional): Redpanda, a live per-generation drag nowcast | done |
+| 7 | Analysis: storm sensitivity with bootstrap CIs, figures, citation | **done** |
 
 ## Documentation
 
@@ -349,3 +382,4 @@ not fewer facts.
 | Phase 4: hardening | [phase-4.md](docs/phases/phase-4.md) | [phase-4-plain.md](docs/phases/phase-4-plain.md) |
 | Phase 5: serving and documentation | [phase-5.md](docs/phases/phase-5.md) | [phase-5-plain.md](docs/phases/phase-5-plain.md) |
 | Phase 6: streaming (optional) | [phase-6.md](docs/phases/phase-6.md) | [phase-6-plain.md](docs/phases/phase-6-plain.md) |
+| Phase 7: analysis and publication | [phase-7.md](docs/phases/phase-7.md) | [phase-7-plain.md](docs/phases/phase-7-plain.md) |

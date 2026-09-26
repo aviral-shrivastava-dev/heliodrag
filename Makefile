@@ -8,7 +8,7 @@ DBT := $(UV) run dbt
 DBT_FLAGS := --project-dir $(DBT_DIR) --profiles-dir $(DBT_DIR)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup demo app lint format typecheck manifest test test-science test-cov run build backfill docs docs-site clean
+.PHONY: help setup demo app lint format typecheck manifest test test-science test-cov run build backfill figures docs docs-site clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -67,6 +67,9 @@ build: manifest ## Sync bronze views, then run dbt build (models + tests)
 
 backfill: ## Land and model everything from 2020 to yesterday, in one command
 	$(UV) run starlink-drag backfill
+
+figures: ## Regenerate every analysis figure and table from the gold marts (Phase 7)
+	$(UV) run python -m analysis.make_figures
 
 docs: ## Build dbt docs into transform/target/
 	$(DBT) deps $(DBT_FLAGS)
