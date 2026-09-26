@@ -8,7 +8,7 @@ DBT := $(UV) run dbt
 DBT_FLAGS := --project-dir $(DBT_DIR) --profiles-dir $(DBT_DIR)
 
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format typecheck manifest test test-science test-cov run build backfill docs clean
+.PHONY: help setup demo app lint format typecheck manifest test test-science test-cov run build backfill docs docs-site clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -19,6 +19,12 @@ setup: ## Create the venv, install everything, install the git hooks
 	$(UV) run pre-commit install
 	$(DBT) deps $(DBT_FLAGS)
 	@test -f .env || (cp .env.example .env && echo "created .env -- fill it in")
+
+demo: ## From a fresh clone: ingest the last 30 days, model them, open the explorer
+	$(UV) run starlink-drag demo
+
+app: ## Open the explorer on the warehouse you already have
+	$(UV) run starlink-drag app
 
 lint: ## ruff check + format check + mypy
 	$(UV) run ruff check .
@@ -68,7 +74,10 @@ docs: ## Build dbt docs into transform/target/
 	$(UV) run starlink-drag data-dictionary
 	@echo "open $(DBT_DIR)/target/index.html"
 
+docs-site: ## Build the publishable dbt docs page into site/ (it contains no data)
+	$(UV) run starlink-drag docs-site --output site
+
 clean: ## Remove build, cache and dbt artefacts (never touches data/)
-	rm -rf .mypy_cache .pytest_cache .ruff_cache .coverage htmlcov
+	rm -rf .mypy_cache .pytest_cache .ruff_cache .coverage htmlcov site
 	rm -rf $(DBT_DIR)/target $(DBT_DIR)/dbt_packages $(DBT_DIR)/logs
 	find . -name '__pycache__' -type d -prune -exec rm -rf {} +

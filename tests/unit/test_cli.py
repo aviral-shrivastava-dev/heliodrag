@@ -42,3 +42,24 @@ def test_doctor_fails_loudly_when_credentials_are_absent() -> None:
 
     assert result.exit_code == 1
     assert "space-track credentials" in result.stdout
+
+
+@pytest.mark.parametrize("command", ["demo", "app", "docs-site", "data-dictionary"])
+def test_the_serving_commands_are_registered(command: str) -> None:
+    result = runner.invoke(app, [command, "--help"])
+
+    assert result.exit_code == 0
+
+
+def test_demo_without_credentials_says_how_to_get_them() -> None:
+    """The first thing a newcomer runs. It must fail with directions, not a trace."""
+    result = runner.invoke(app, ["demo"])
+
+    assert result.exit_code == 1
+    assert "space-track.org/auth/createAccount" in result.stdout
+
+
+def test_demo_refuses_an_empty_window() -> None:
+    result = runner.invoke(app, ["demo", "--days", "0"])
+
+    assert result.exit_code != 0

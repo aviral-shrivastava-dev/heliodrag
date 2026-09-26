@@ -153,6 +153,20 @@ def write(
     return LoadOutcome(spec.table, partitions, frame.height, 0)
 
 
+AUDIT_SCHEMA: dict[str, pl.DataType | type[pl.DataType]] = {
+    "table_name": pl.Utf8,
+    "source": pl.Utf8,
+    "partition_from": pl.Utf8,
+    "partition_to": pl.Utf8,
+    "partition_count": pl.Int64,
+    "rows_written": pl.Int64,
+    "rows_quarantined": pl.Int64,
+    "ingest_timestamp": pl.Datetime("us"),
+    "ingest_date": pl.Date,
+}
+"""Columns of the load log. Named so the docs build can create the table empty."""
+
+
 def write_quarantine(frame: pl.DataFrame, settings: Settings) -> int:
     """Append failed rows to the quarantine table.
 
@@ -200,17 +214,7 @@ def write_audit(
             "ingest_timestamp": [now.replace(tzinfo=None)],
             "ingest_date": [now.date()],
         },
-        schema={
-            "table_name": pl.Utf8,
-            "source": pl.Utf8,
-            "partition_from": pl.Utf8,
-            "partition_to": pl.Utf8,
-            "partition_count": pl.Int64,
-            "rows_written": pl.Int64,
-            "rows_quarantined": pl.Int64,
-            "ingest_timestamp": pl.Datetime("us"),
-            "ingest_date": pl.Date,
-        },
+        schema=AUDIT_SCHEMA,
     )
     resource = dlt.resource(
         audit.to_arrow(),

@@ -34,3 +34,5 @@ consequences is not finished.
 | [0003](0003-sliding-window-rate-limiter.md) | A sliding-window rate limiter, not a token bucket | accepted |
 | [0004](0004-bronze-partition-replace-and-byte-identity.md) | Bronze replaces partitions; provenance lives outside the data files | partly superseded by 0005 |
 | [0005](0005-bronze-appends-rather-than-replaces.md) | Bronze appends rather than replaces partitions | accepted |
+| [0006](0006-explorer-reads-gold-through-short-lived-connections.md) | The explorer reads gold marts only, through short-lived connections | accepted |
+| [0007](0007-publish-schema-and-aggregates-never-element-data.md) | Publish the schema and aggregates, never element-level data | accepted |

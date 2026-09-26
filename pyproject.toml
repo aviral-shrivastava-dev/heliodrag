@@ -87,7 +87,7 @@ select = [
 [tool.mypy]
 python_version = "3.12"
 # analysis/ joins this list in Phase 7, when it first contains modules.
-files = ["src", "tests"]
+files = ["src", "tests", "app"]
 strict = true
 # Third-party packages in this stack ship partial or absent type information.
 # We keep our own code strict and stop at the boundary.

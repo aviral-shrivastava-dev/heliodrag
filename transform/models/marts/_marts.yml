@@ -215,3 +215,39 @@ models:
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [storm_id, generation, days_from_peak, altitude_shell_km]
+
+  - name: fct_space_weather_daily
+    description: >
+      One row per day of space weather: F10.7, Kp, Ap and Dst, aggregated from
+      hourly OMNI. The forcing as a series in its own right, so serving and
+      analysis do not re-derive it from fct_daily_decay, where it is repeated
+      once per satellite and missing on days nothing was observed.
+    columns:
+      - name: epoch_date
+        data_tests: [not_null, unique]
+      - name: f10_7_sfu
+        description: Daily 10.7 cm solar radio flux, in solar flux units.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 50
+              max_value: 600
+              row_condition: "f10_7_sfu is not null"
+      - name: kp_max
+        description: Worst three-hour Kp of the day, 0 to 9.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 9
+              row_condition: "kp_max is not null"
+      - name: dst_min_nt
+        description: Worst hourly Dst of the day. More negative is a stronger storm.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -1000
+              max_value: 200
+              row_condition: "dst_min_nt is not null"
+      - name: is_storm_day
+        description: >
+          Dst at or below -50 nT, the threshold fct_storm_epoch uses. False where
+          Dst was not measured.
+        data_tests: [not_null]

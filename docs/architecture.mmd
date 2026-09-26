@@ -1,2 +1,33 @@
-%% Rendered into docs/architecture.md in Phase 5.
-%% Kept as a separate file so the diagram can be linted and version-diffed.
+flowchart LR
+    subgraph sources["Public sources"]
+        ST["Space-Track.org<br/>element sets, catalogue"]
+        OM["NASA OMNI via HAPI<br/>F10.7, Kp, Ap, Dst"]
+        GC["GCAT<br/>hardware generations"]
+    end
+
+    subgraph ingest["Ingestion (Python)"]
+        CL["Clients<br/>rate limiter, retries"]
+        PA["Pandera contracts<br/>failures to quarantine"]
+        DL["dlt"]
+    end
+
+    BR[("Bronze: Iceberg on Parquet<br/>daily partitions, append-only")]
+
+    subgraph warehouse["Warehouse (DuckDB + dbt)"]
+        SV["Silver<br/>staging, dedupe, decay rates"]
+        GD[("Gold marts<br/>dim_*, fct_*")]
+    end
+
+    ST --> CL
+    OM --> CL
+    CL --> PA --> DL --> BR
+    BR -->|"views over the current snapshot"| SV
+    GC -->|"committed seed, CC-BY"| SV
+    SV --> GD
+    GD --> APP["Streamlit explorer"]
+    GD --> AN["Analysis (Phase 7)"]
+    GD -.->|"schema only, no rows"| DOCS["dbt docs on GitHub Pages"]
+
+    DG{{"Dagster<br/>partitions, asset checks, retries"}}
+    DG -.-> CL
+    DG -.-> SV

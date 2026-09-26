@@ -6,9 +6,17 @@
 -- Space-Track knows about but GCAT has not yet classified must still appear,
 -- labelled 'unknown', rather than vanishing from the counts.
 
-with latest_snapshot as (
+with snapshots as (
 
-    select max(ingest_date) as ingest_date
+    -- The newest snapshot is found with a window, not with a join or a scalar
+    -- subquery. Under DuckDB 1.5.5, either of those combined with the QUALIFY
+    -- below built dim_satellite from the first of twenty Parquet files only --
+    -- 865 satellites of 12,892 -- inside CREATE TABLE AS, while a plain SELECT
+    -- of the same SQL returned all of them. This shape does not trigger it, and
+    -- assert_dim_satellite_is_the_latest_catalogue fails if one ever does.
+    select
+        *,
+        max(ingest_date) over () as latest_ingest_date
     from {{ ref('stg_spacetrack__satcat') }}
 
 ),
@@ -17,10 +25,10 @@ catalogue as (
 
     -- Bronze appends, so re-ingesting on a day already covered leaves a second
     -- copy of that snapshot. The rows are identical, so any one is kept.
-    select satcat.*
-    from {{ ref('stg_spacetrack__satcat') }} as satcat
-    inner join latest_snapshot using (ingest_date)
-    qualify row_number() over (partition by satcat.norad_id order by satcat.norad_id) = 1
+    select * exclude (latest_ingest_date)
+    from snapshots
+    where ingest_date = latest_ingest_date
+    qualify row_number() over (partition by norad_id order by norad_id) = 1
 
 )
 

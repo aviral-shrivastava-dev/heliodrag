@@ -4,7 +4,7 @@
 files beside each model; run `starlink-drag data-dictionary` to rebuild
 this from dbt's manifest after `dbt docs generate`.
 
-Last generated 2026-09-19 from 11 models and 5 sources.
+Last generated 2026-09-26 from 13 models and 5 sources.
 
 Medallion layers are dbt **tags**, not folders: staging and intermediate
 are `silver`, marts are `gold`, and bronze is the Iceberg landing zone
@@ -63,13 +63,13 @@ Space-Track catalogue snapshot, partitioned by the date it was fetched. Each ing
 
 ### `stg_nasa__omni`
 
-*view* · tags: silver · 5 tests
+*view* · tags: silver · 4 tests
 
 Hourly space weather. Kp is divided by ten here to restore its real 0-9 scale; OMNI transmits it as an integer multiple of ten.
 
 | Column | Type | Description |
 | --- | --- | --- |
-| `observed_at` | TIMESTAMP |  |
+| `observed_at` | TIMESTAMP | Not unique here, and that is correct. Staging is 1:1 with bronze, which is append-only, so re-running a partition leaves a duplicate. Uniqueness is asserted on int_omni__deduplicated. |
 | `kp_index` | DOUBLE |  |
 | `dst_nt` | INTEGER | Reached -406 nT in May 2024, the deepest of Solar Cycle 25. |
 | `f10_7_sfu` | DOUBLE |  |
@@ -124,6 +124,17 @@ One element set per satellite per epoch. Collapses both append duplicates and Sp
 | --- | --- | --- |
 | `gp_id` | BIGINT |  |
 
+### `int_omni__deduplicated`
+
+*view* · tags: silver · 3 tests
+
+One space-weather record per hour, collapsing the duplicates that append-only bronze leaves behind after a re-run.
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `observed_at` | TIMESTAMP |  |
+| `epoch_date` | DATE |  |
+
 ### `int_satellite__generation_labeled`
 
 *view* · tags: silver · 5 tests
@@ -165,7 +176,7 @@ One row per hardware generation: the unit the research question compares. Masses
 
 ### `dim_satellite`
 
-*table* · tags: gold · 12 tests
+*table* · tags: gold · 13 tests
 
 One row per catalogued Starlink satellite. Grain is the satellite, not the satellite-day: everything here is a property of the hardware or of its life as a whole.
 
@@ -204,6 +215,20 @@ The confounder controls are columns, not filters, so the analysis can condition 
 | `is_analysis_ready` | BOOLEAN | Real rate, sane interval, not manoeuvring, known generation. The headline comparison uses only these rows. |
 | `dst_min_nt` | INTEGER | Worst Dst that day. Null where OMNI has not been landed for the date. |
 | `f10_7_sfu` | DOUBLE | Daily solar radio flux. |
+
+### `fct_space_weather_daily`
+
+*table* · tags: gold · 6 tests
+
+One row per day of space weather: F10.7, Kp, Ap and Dst, aggregated from hourly OMNI. The forcing as a series in its own right, so serving and analysis do not re-derive it from fct_daily_decay, where it is repeated once per satellite and missing on days nothing was observed.
+
+| Column | Type | Description |
+| --- | --- | --- |
+| `epoch_date` | DATE |  |
+| `f10_7_sfu` | DOUBLE | Daily 10.7 cm solar radio flux, in solar flux units. |
+| `kp_max` | DOUBLE | Worst three-hour Kp of the day, 0 to 9. |
+| `dst_min_nt` | INTEGER | Worst hourly Dst of the day. More negative is a stronger storm. |
+| `is_storm_day` | BOOLEAN | Dst at or below -50 nT, the threshold fct_storm_epoch uses. False where Dst was not measured. |
 
 ### `fct_storm_epoch`
 

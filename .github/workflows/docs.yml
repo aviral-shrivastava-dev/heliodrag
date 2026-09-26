@@ -1,0 +1,82 @@
+name: docs
+
+# Publishes the dbt docs -- every model, column type, test and the lineage
+# graph -- to GitHub Pages, as one static page.
+#
+# The page is built against a warehouse created empty for the purpose (see
+# src/starlink_drag/docs_site.py): real schema, no rows. That is what makes it
+# publishable. There is no Space-Track data in the database it comes from, so
+# there is none in the page.
+#
+# One-time setup, by the repository owner: Settings -> Pages -> Build and
+# deployment -> Source: "GitHub Actions". Until then `build` passes and
+# `deploy` fails, which is the signal that the setting is missing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "transform/**"
+      - "src/starlink_drag/docs_site.py"
+      - "src/starlink_drag/dbt_runner.py"
+      - "src/starlink_drag/schemas/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment at a time; never cancel one halfway through.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  FORCE_COLOR: "1"
+
+jobs:
+  build:
+    name: build the docs page
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.16"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Build the page against an empty warehouse
+        run: uv run starlink-drag docs-site --output site
+
+      - name: Upload it for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

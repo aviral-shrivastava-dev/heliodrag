@@ -78,9 +78,10 @@ schema: Final = pa.DataFrameSchema(
 def to_frame(rows: list[dict[str, Any]], ingest_date: dt.date) -> pl.DataFrame:
     """Cast raw SATCAT records into the typed bronze frame, sorted by NORAD ID."""
     if not rows:
-        return pl.DataFrame(
-            schema={c: pl.Utf8 for c in FIELD_MAP.values()} | {"ingest_date": pl.Date}
-        )
+        # Typed from the contract, not left as strings: an empty array is what a
+        # throttled Space-Track returns, and the frame still has to match the
+        # bronze table it would be written to.
+        return pl.DataFrame(schema={c: _polars_dtype(c) for c in BRONZE_COLUMNS})
 
     frame = pl.DataFrame(
         [{k: r.get(k) for k in FIELD_MAP} for r in rows],
@@ -95,3 +96,8 @@ def to_frame(rows: list[dict[str, Any]], ingest_date: dt.date) -> pl.DataFrame:
     )
     frame = frame.with_columns(pl.lit(ingest_date).cast(pl.Date).alias("ingest_date"))
     return frame.select(BRONZE_COLUMNS).sort("norad_id")
+
+
+def _polars_dtype(column: str) -> pl.DataType:
+    dtype = schema.columns[column].dtype
+    return dtype.type if hasattr(dtype, "type") else dtype  # type: ignore[no-any-return]

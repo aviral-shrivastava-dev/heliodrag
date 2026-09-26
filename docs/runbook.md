@@ -111,6 +111,26 @@ together exceeding it. The Dagster assets share a concurrency key, but a bare
 `dagster asset materialize` does not queue — so this is currently an operational
 rule, not something the machine enforces.
 
+**Nor two one after the other, without a gap.** "At once" is not the only way
+to share an hour. `starlink-drag backfill` runs the catalogue step and the
+element fetch as *separate* Dagster runs, and so as separate processes with
+separate limiters; two backfills over different ranges, started back to back,
+are separate processes too. Each new process starts counting from zero while
+the previous one's requests are still inside Space-Track's rolling hour. This
+was noticed on 2026-09-25, before it happened: a resume queued its second range
+to start the moment the first finished, which could have put about 450
+requests into one hour. The fix was operational:
+
+- leave an hour between Space-Track-heavy processes, and
+- give a large run headroom for the small catalogue step in front of it:
+
+  ```bash
+  SPACETRACK_REQUESTS_PER_HOUR=280 starlink-drag backfill --start 2025-01-01
+  ```
+
+A limiter shared between processes would remove the rule; it is listed as
+future work in the README.
+
 ---
 
 ## Schema drift
@@ -221,6 +241,43 @@ you want to skip them, start from the last window the log reported.
 For anything long, run it under something that outlives your shell — `tmux`, a
 service, or the Dagster daemon with a schedule.
 
+### The run died of memory, and its retry made things worse
+
+**Looks like:** `pyarrow.lib.ArrowMemoryError: realloc of size ... failed` or
+`ZSTD compression failed: Allocation error : not enough memory` in the dlt
+load, then `STEP_UP_FOR_RETRY`, then windows that were already landed being
+fetched again -- and then windows returning `0 rows, 0 partitions`.
+
+**What happened, on 2026-09-26.** The element fetch holds one whole window in
+memory before writing it. At 2025 volumes -- about 12,000 satellites -- a 90-day
+window is about 1.7M element sets, and the fourth window's write ran out of
+memory. Dagster's retry policy then restarted the step **as a new process**,
+with a new rate limiter, from the start of the range. About 350 requests went
+out in half an hour; Space-Track's hourly limit is 300, and it answered the
+excess with empty windows. The run was stopped by hand.
+
+**What to do until the ingest is fixed:**
+
+1. Stop the run. Do not let Dagster retry an element fetch: every retry
+   re-requests the whole range with a limiter that has forgotten the last hour.
+2. Wait at least an hour before any Space-Track request.
+3. Land the rest with the plain CLI, which is one process with no automatic
+   retries, in smaller windows so memory stays bounded:
+
+   ```bash
+   starlink-drag ingest gp --start 2025-12-27 --end 2026-09-26 --window-days 30
+   ```
+
+4. Then rebuild: `make build`, or `starlink-drag warehouse sync` followed by
+   `dbt build`.
+
+**And check for a swallowed write.** If the log shows dlt saying *"The pipeline
+`run` method will now load the pending load packages. The data you passed to
+the run function will not be extracted"*, the write that printed it loaded the
+batch left over from the crash **instead of** its own data -- while the asset
+still logged its own row count. Re-run that window. On 2026-09-26 the swallowed
+window had already been landed by the first attempt, so nothing was lost.
+
 ---
 
 ## Duplicate rows after a re-run
@@ -289,3 +346,51 @@ Rebuild the generation seed after a launch campaign:
 ```bash
 starlink-drag seed-generations --refresh
 ```
+
+### `dim_satellite` is far too small, and every fact fails its relationship test
+
+**Looks like:** `dbt build` fails two tests at once --
+`expect_table_row_count_to_be_between_dim_satellite` and
+`relationships_fct_daily_decay_norad_id__norad_id__ref_dim_satellite_` with
+millions of failing rows -- while `dim_generation`, built a second earlier from
+the same model, has the right totals.
+
+**What it was.** On 2026-09-25 `dim_satellite` held 865 satellites instead of
+12,892: exactly the contents of the *first* of the twenty Parquet files behind
+`bronze.satcat`. A plain `SELECT` of the same SQL returned all 12,892. Under
+DuckDB 1.5.5, a latest-snapshot filter (a join or a scalar subquery on
+`max(ingest_date)`) combined with `QUALIFY row_number() ... = 1` read only the
+first file *inside `CREATE TABLE AS`* -- which is how dbt builds every table.
+It was deterministic on the real lake; a small synthetic reproduction did not
+trigger it.
+
+**What protects you now.** `int_satellite__generation_labeled` finds the latest
+snapshot with `max(ingest_date) over ()` instead, which does not trigger it,
+and `assert_dim_satellite_is_the_latest_catalogue` compares the built table
+against the catalogue on every build. dbt tests run as plain `SELECT`s, so the
+test cannot be fooled by the same bug.
+
+**If a mart ever looks short again,** compare the stored table with a fresh
+query of its compiled SQL:
+
+```python
+import duckdb
+
+con = duckdb.connect("data/atlas.duckdb", read_only=True)
+sql = open("transform/target/compiled/starlink_drag/models/marts/dim_satellite.sql").read()
+print(
+    con.sql("select count(*) from dim_satellite").fetchone(),
+    con.sql(f"select count(*) from ({sql})").fetchone(),
+)
+```
+
+Two different numbers mean the build, not the data, is wrong. Rebuild that
+model and everything downstream: `uv run dbt build --project-dir transform
+--profiles-dir transform --select dim_satellite+`.
+
+### The explorer says the warehouse is locked
+
+DuckDB allows one writer. While `dbt build` holds the file, the explorer cannot
+open it and says so. Reload when the build finishes. The explorer never holds
+the file itself, so it cannot be the cause of a build failing to start
+([ADR-0006](adr/0006-explorer-reads-gold-through-short-lived-connections.md)).

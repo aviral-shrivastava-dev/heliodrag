@@ -54,3 +54,6 @@ analysis/figures/*
 .DS_Store
 .idea/
 .vscode/
+
+# Built dbt docs page (make docs-site); published by .github/workflows/docs.yml
+site/

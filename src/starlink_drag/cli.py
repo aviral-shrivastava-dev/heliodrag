@@ -15,6 +15,12 @@ from typing import Annotated
 import typer
 
 from starlink_drag import __version__
+from starlink_drag.cli_serving import (
+    app_command,
+    data_dictionary_command,
+    demo_command,
+    docs_site_command,
+)
 from starlink_drag.config import Settings, get_settings
 
 app = typer.Typer(
@@ -32,6 +38,11 @@ warehouse_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(warehouse_app)
+
+app.command("demo")(demo_command)
+app.command("app")(app_command)
+app.command("docs-site")(docs_site_command)
+app.command("data-dictionary")(data_dictionary_command)
 
 StartOpt = Annotated[
     dt.datetime,
@@ -267,25 +278,6 @@ def check_upstream_command(
 
     if any(not result.ok for result in results):
         raise typer.Exit(code=1)
-
-
-@app.command("data-dictionary")
-def data_dictionary_command() -> None:
-    """Regenerate docs/data_dictionary.md from dbt's manifest.
-
-    Generated rather than hand-written: a hand-maintained dictionary is wrong
-    within a week and nobody notices. Run `dbt docs generate` first.
-    """
-    from starlink_drag.data_dictionary import write
-
-    transform = Path("transform") / "target"
-    manifest = transform / "manifest.json"
-    if not manifest.exists():
-        typer.echo(f"{manifest} not found. Run `make docs` (dbt docs generate) first.", err=True)
-        raise typer.Exit(code=1)
-
-    written = write(manifest, transform / "catalog.json", Path("docs") / "data_dictionary.md")
-    typer.echo(f"wrote {written}")
 
 
 def _require_credentials(settings: Settings) -> None:

@@ -19,6 +19,12 @@ import polars as pl
 from pandera.errors import SchemaError, SchemaErrors
 
 QUARANTINE_COLUMNS = ("source", "ingest_date", "failure_reason", "payload")
+QUARANTINE_SCHEMA: dict[str, type[pl.DataType]] = {
+    "source": pl.Utf8,
+    "ingest_date": pl.Date,
+    "failure_reason": pl.Utf8,
+    "payload": pl.Utf8,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,12 +133,7 @@ def _quarantine_rows(
             "failure_reason": reasons,
             "payload": payloads,
         },
-        schema={
-            "source": pl.Utf8,
-            "ingest_date": pl.Date,
-            "failure_reason": pl.Utf8,
-            "payload": pl.Utf8,
-        },
+        schema=QUARANTINE_SCHEMA,
     )
 
 
@@ -143,11 +144,4 @@ def _as_json(row: dict[str, object]) -> str:
 
 
 def _empty_quarantine() -> pl.DataFrame:
-    return pl.DataFrame(
-        schema={
-            "source": pl.Utf8,
-            "ingest_date": pl.Date,
-            "failure_reason": pl.Utf8,
-            "payload": pl.Utf8,
-        }
-    )
+    return pl.DataFrame(schema=QUARANTINE_SCHEMA)

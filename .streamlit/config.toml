@@ -1,0 +1,15 @@
+# Read by `streamlit run`, which the CLI starts from the repository root.
+
+[server]
+# Without this, the very first `streamlit run` on a machine stops to ask for an
+# email address -- which would leave a newcomer's one-command setup waiting on a
+# prompt that nothing in the README mentions. The URL is printed instead.
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# The explorer is read, not developed, by most people who open it; hide the
+# deploy button and developer menu.
+toolbarMode = "viewer"

@@ -79,6 +79,19 @@ def test_an_empty_response_yields_an_empty_typed_frame() -> None:
     assert frame.columns == list(gp.BRONZE_COLUMNS)
 
 
+def test_an_empty_response_has_the_same_types_as_a_full_one() -> None:
+    """An empty array is how a throttled Space-Track answers. The frame built
+    from it must still match the bronze table's types; SATCAT once returned
+    every column as a string here."""
+    ingest_date = dt.date(2024, 5, 20)
+
+    assert gp.to_frame([]).schema == gp.to_frame(_gp_rows()).schema
+    assert (
+        satcat.to_frame([], ingest_date).schema
+        == satcat.to_frame(_satcat_rows(), ingest_date).schema
+    )
+
+
 def test_null_decay_date_survives_casting() -> None:
     frame = gp.to_frame(_gp_rows())
 
