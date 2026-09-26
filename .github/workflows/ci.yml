@@ -60,3 +60,49 @@ jobs:
             exit 1
           fi
           echo "no tracked files under data/"
+
+  s3_lake:
+    name: the lake on S3 (MinIO)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # The rest of the suite uses a lake on local disk. This runs the same code
+    # against a real S3 API: MinIO, standing in for Cloudflare R2. Until
+    # 2026-09-26 that path did not work at all, and no test would have said so.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.16"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-groups --frozen
+
+      - name: Parse the dbt project
+        run: make manifest
+
+      - name: Start MinIO
+        # Started with `docker run`, not as a service container: GitHub service
+        # containers cannot be given a command, and MinIO needs `server /data`.
+        # Same image and tag as infra/docker/docker-compose.yml.
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+          for attempt in $(seq 1 30); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 2
+          done
+          curl -sf http://localhost:9000/minio/health/live
+
+      - name: Test the lake on S3
+        env:
+          LAKE_TEST_S3_ENDPOINT: http://localhost:9000
+        run: uv run pytest tests/integration/test_s3_lake.py -rs

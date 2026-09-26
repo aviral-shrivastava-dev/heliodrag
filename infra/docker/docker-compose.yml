@@ -4,7 +4,10 @@
 #
 # MinIO stands in for Cloudflare R2. Both speak the S3 API, so the only thing
 # that changes between local and production is the endpoint and the
-# credentials -- which is the point of LAKE_BACKEND.
+# credentials -- which is the point of LAKE_BACKEND (see ADR-0010).
+#
+# Space-Track credentials come from the repository's .env, the same file the
+# uv path uses. Compose would otherwise look for .env next to this file.
 #
 # Credentials here are local-only defaults and deliberately obvious. Real ones
 # live in .env, which is gitignored; nothing in this file is a secret.
@@ -60,16 +63,19 @@ services:
         condition: service_completed_successfully
     ports:
       - "3000:3000"
+    # Space-Track credentials, from the repository root. Without them the UI
+    # still loads and every asset is visible; ingestion fails with a clear
+    # message. `environment` below overrides anything here, so a .env copied
+    # from .env.example cannot switch these containers back to a local lake.
+    env_file:
+      - path: ../../.env
+        required: false
     environment:
       LAKE_BACKEND: r2
       LAKE_ENDPOINT_URL: http://minio:9000
       LAKE_BUCKET: ${LAKE_BUCKET:-starlink-drag-atlas}
       LAKE_ACCESS_KEY_ID: ${LAKE_ACCESS_KEY_ID:-minioadmin}
       LAKE_SECRET_ACCESS_KEY: ${LAKE_SECRET_ACCESS_KEY:-minioadmin}
-      # Space-Track credentials are NOT defaulted. Without them the UI still
-      # loads and every asset is visible; ingestion fails with a clear message.
-      SPACETRACK_IDENTITY: ${SPACETRACK_IDENTITY:-}
-      SPACETRACK_PASSWORD: ${SPACETRACK_PASSWORD:-}
       DUCKDB_PATH: /opt/atlas/data/atlas.duckdb
     volumes:
       - dagster-home:/opt/dagster/home
@@ -86,14 +92,15 @@ services:
     depends_on:
       minio-init:
         condition: service_completed_successfully
+    env_file:
+      - path: ../../.env
+        required: false
     environment:
       LAKE_BACKEND: r2
       LAKE_ENDPOINT_URL: http://minio:9000
       LAKE_BUCKET: ${LAKE_BUCKET:-starlink-drag-atlas}
       LAKE_ACCESS_KEY_ID: ${LAKE_ACCESS_KEY_ID:-minioadmin}
       LAKE_SECRET_ACCESS_KEY: ${LAKE_SECRET_ACCESS_KEY:-minioadmin}
-      SPACETRACK_IDENTITY: ${SPACETRACK_IDENTITY:-}
-      SPACETRACK_PASSWORD: ${SPACETRACK_PASSWORD:-}
       DUCKDB_PATH: /opt/atlas/data/atlas.duckdb
     volumes:
       - dagster-home:/opt/dagster/home

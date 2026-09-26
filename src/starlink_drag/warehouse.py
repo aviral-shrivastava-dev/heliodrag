@@ -22,6 +22,7 @@ from pathlib import Path
 
 import duckdb
 
+from starlink_drag import lake
 from starlink_drag.config import Settings
 from starlink_drag.ingest.bronze import (
     AUDIT_TABLE,
@@ -60,12 +61,19 @@ class ViewSync:
 
 
 def live_files(settings: Settings, table: str) -> list[str]:
-    """Paths of the Parquet files the table's current snapshot references."""
+    """Paths of the Parquet files the table's current snapshot references.
+
+    Local paths for a local lake; ``s3://`` URIs, as the snapshot records
+    them, for a remote one.
+    """
     handle = iceberg_table(settings, table)
     if handle is None:
         return []
     paths = []
     for task in handle.scan().plan_files():
+        if lake.is_remote(settings):
+            paths.append(task.file.file_path)
+            continue
         path = local_path(task.file.file_path)
         if path is not None and path.exists():
             paths.append(path.as_posix())
@@ -79,6 +87,11 @@ def sync(settings: Settings, *, database: Path | None = None) -> list[ViewSync]:
 
     results: list[ViewSync] = []
     with duckdb.connect(str(target)) as con:
+        secret = lake.duckdb_secret(settings)
+        if secret:
+            # Only this connection's counts need it. dbt makes its own secret
+            # from the profile, because the views store paths, not keys.
+            con.execute(secret)
         con.execute(f"CREATE SCHEMA IF NOT EXISTS {BRONZE_SCHEMA}")
         for table, view in VIEWS.items():
             qualified = f"{BRONZE_SCHEMA}.{view}"

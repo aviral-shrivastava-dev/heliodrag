@@ -77,11 +77,13 @@ replacing partitions was measured at 200 times slower than appending, so
 duplicates are allowed to land and are collapsed in silver. Load provenance
 lives in a separate audit table, not in the data files.
 
-The lake is a directory under `data/`. MinIO (`infra/docker`) and Cloudflare
-R2 (`infra/terraform`) are meant to be reachable by setting `LAKE_BACKEND=r2`,
-but that path is **not wired yet**: the endpoint and keys exist in the settings
-and in docker-compose, and nothing passes them to dlt, pyiceberg or DuckDB. The
-Docker stack starts; the pipeline cannot yet write to it.
+The lake is a directory under `data/`, or an S3-compatible bucket with
+`LAKE_BACKEND=r2`: MinIO from `infra/docker`, or Cloudflare R2 from
+`infra/terraform`. `starlink_drag.lake` builds each tool's view of it -- dlt's
+credentials, pyiceberg's properties, DuckDB's secret, the variables dbt's
+profile reads -- from one set of settings, so they cannot disagree. The S3 path
+is tested against MinIO in CI
+([ADR-0010](adr/0010-one-lake-module-for-every-storage-backend.md)).
 
 ### The bridge into the warehouse — `src/starlink_drag/warehouse.py`
 

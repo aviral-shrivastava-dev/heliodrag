@@ -125,6 +125,29 @@ gone wrong so far, starting with credentials, rate limits and Windows paths. The
 Makefile wraps the same commands (`make demo`, `make test`) for those with
 `make` installed; nothing requires it.
 
+### Or run it the way production would: Docker
+
+`infra/docker` runs the same pipeline as services: MinIO as the lake, standing
+in for Cloudflare R2, and Dagster's web UI and scheduler. It needs Docker
+Desktop as well as the `.env` above, and the first build takes a few minutes.
+
+```bash
+docker compose -f infra/docker/docker-compose.yml up -d --build
+```
+
+Dagster is then at **http://localhost:3000** and MinIO's console at
+**http://localhost:9001** (local-only login `minioadmin` / `minioadmin`). Land
+and model a few days inside the stack -- any range works:
+
+```bash
+docker compose -f infra/docker/docker-compose.yml exec dagster-webserver starlink-drag backfill --start 2026-09-15 --end 2026-09-16
+```
+
+That lake lives in MinIO, separate from the one `demo` builds on your disk. Run
+ingestion in one place at a time: each keeps its own record of Space-Track
+requests. Stop the stack with
+`docker compose -f infra/docker/docker-compose.yml down`.
+
 ## Sample output
 
 ![The explorer: daily median altitude change for each Starlink generation, under a strip of the Dst geomagnetic index, with storm days shaded across every panel](docs/images/explorer.png)
@@ -150,12 +173,12 @@ publishable; the element-level data behind them is not.
 | Packaging | uv, `src/` layout, committed `uv.lock` | Reproducible installs fast enough to run on every CI push ([ADR-0001](docs/adr/0001-packaging-with-uv.md)) |
 | Ingestion | httpx clients + dlt | The clients own rate limiting and retries, which must be exact; dlt owns the write, which should be boring |
 | Validation | Pandera, with a quarantine table | A bad row is kept with its reason, not dropped silently or loaded silently |
-| Lake | Apache Iceberg on Parquet, on local disk | Snapshots make "which files are current" a fact rather than a directory listing. Written for S3-compatible storage too, but that path is not wired yet (see known limits) |
+| Lake | Apache Iceberg on Parquet: local disk, or S3-compatible storage | Snapshots make "which files are current" a fact rather than a directory listing. The same code writes to a local folder or to MinIO and R2, tested against MinIO in CI ([ADR-0010](docs/adr/0010-one-lake-module-for-every-storage-backend.md)) |
 | Engine | DuckDB + Polars | The whole dataset is a few gigabytes. A single process is faster, cheaper and easier to reason about than a cluster |
 | Transformation | dbt-core + dbt-duckdb | Versioned, tested SQL with lineage a reviewer can read; 84 tests on every build |
 | Orchestration | Dagster | Partitioned assets make backfills and per-day idempotency the default, not a convention ([ADR-0002](docs/adr/0002-dagster-over-airflow.md)) |
 | Serving | Streamlit + Altair | Reads gold marts only, through connections that never block a build ([ADR-0006](docs/adr/0006-explorer-reads-gold-through-short-lived-connections.md)) |
-| Infrastructure | Terraform (Cloudflare R2), docker-compose (MinIO + Dagster) | The intended production lake, and a local stack to rehearse it; both start, neither is yet written to by the pipeline |
+| Infrastructure | Terraform (Cloudflare R2), docker-compose (MinIO + Dagster) | The production lake, and a local stack that runs the whole pipeline against the same S3 API |
 | CI | GitHub Actions | Tests and a real dbt build on every push; a nightly check that the upstream APIs have not changed shape |
 
 ## Monthly cost
@@ -205,12 +228,11 @@ applied: that needs a Cloudflare account and token.
   defaults leave headroom for the nightly check on GitHub; ingestion on two
   machines would need its budget split
   ([runbook](docs/runbook.md#rate-limit-exhaustion)).
-- **Only the local lake works.** `LAKE_BACKEND=r2` is meant to point the
-  pipeline at Cloudflare R2, or at MinIO from `infra/docker`, but the endpoint
-  and keys are never passed to the code that reads and writes the lake. The
-  Docker stack and the Terraform configuration both start and validate; nothing
-  has yet been written through them. Phase 4 checked that they start, not that
-  data flows, and this was found on 2026-09-26.
+- **R2 is not deployed.** The S3 path is tested against MinIO, locally and in
+  CI, and is the code R2 would use; creating the bucket needs a Cloudflare
+  account and token. Until 2026-09-26 the S3 path did not work at all -- Phase 4
+  had checked that the Docker stack starts, not that data flows through it
+  ([ADR-0010](docs/adr/0010-one-lake-module-for-every-storage-backend.md)).
 - DuckDB 1.5.5 was found to build one mart from a fraction of its input inside
   `CREATE TABLE AS`. The model now avoids the pattern that triggers it, and a
   dedicated test would catch a recurrence ([runbook](docs/runbook.md#checks-that-are-failing)).
@@ -221,8 +243,7 @@ applied: that needs a Cloudflare account and token.
   space-weather forcing with bootstrap confidence intervals, conditioned on
   altitude shell, date and manoeuvring, and a superposed-epoch comparison of
   storm responses.
-- Wire the S3 path -- endpoint and keys through to dlt, pyiceberg and DuckDB --
-  prove it end to end against MinIO in Docker, then deploy the lake to R2 and
+- Deploy the lake to R2 -- the code path is already tested against MinIO -- and
   move the nightly ingest onto it.
 - A minimal, shareable reproduction of the DuckDB bug for the DuckDB project.
 - A hosted, aggregates-only explorer, which would be publishable.

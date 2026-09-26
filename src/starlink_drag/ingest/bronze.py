@@ -26,7 +26,7 @@ import datetime as dt
 import hashlib
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Final
 from urllib.parse import unquote, urlparse
 
@@ -34,6 +34,7 @@ import dlt
 import polars as pl
 from pyiceberg.table import StaticTable
 
+from starlink_drag import lake
 from starlink_drag.config import Settings
 
 GP_TABLE: Final = "bronze_gp_history"
@@ -90,13 +91,6 @@ class LoadOutcome:
         )
 
 
-def lake_root(settings: Settings) -> str:
-    """Where bronze lives: a local directory, or the S3-compatible bucket."""
-    if settings.lake.backend == "local":
-        return str((settings.data_dir / "lake").resolve())
-    return f"s3://{settings.lake.bucket}"
-
-
 def pipelines_dir(settings: Settings) -> Path:
     """dlt's own working directory.
 
@@ -112,7 +106,7 @@ def pipelines_dir(settings: Settings) -> Path:
 def make_pipeline(name: str, settings: Settings) -> dlt.Pipeline:
     return dlt.pipeline(
         pipeline_name=name,
-        destination=dlt.destinations.filesystem(lake_root(settings)),
+        destination=lake.dlt_destination(settings),
         dataset_name=DATASET,
         pipelines_dir=str(pipelines_dir(settings)),
     )
@@ -290,18 +284,24 @@ def iceberg_table(settings: Settings, table: str) -> StaticTable | None:
     table no longer contains, silently mixing a partition's old and new
     contents.
     """
-    metadata_dir = Path(lake_root(settings)) / DATASET / table / "metadata"
-    if not metadata_dir.exists():
-        return None
+    metadata_dir = f"{lake.root(settings)}/{DATASET}/{table}/metadata"
+    if lake.is_remote(settings):
+        listing = [
+            f"s3://{path}"
+            for path in lake.filesystem(settings).glob(f"{metadata_dir}/*.metadata.json")
+        ]
+    else:
+        local = Path(metadata_dir)
+        listing = [str(path) for path in local.glob("*.metadata.json")] if local.exists() else []
     versions = [
         (int(match.group(1)), path)
-        for path in metadata_dir.glob("*.metadata.json")
-        if (match := _METADATA_VERSION.match(path.name))
+        for path in listing
+        if (match := _METADATA_VERSION.match(PurePosixPath(path.replace("\\", "/")).name))
     ]
     if not versions:
         return None
     _, latest = max(versions)
-    return StaticTable.from_metadata(str(latest))
+    return StaticTable.from_metadata(latest, properties=lake.iceberg_properties(settings))
 
 
 def read_table(settings: Settings, table: str, *, row_filter: str = "true") -> pl.DataFrame:
@@ -328,7 +328,12 @@ def partition_digest(
     scan = handle.scan(row_filter=f"{partition_column} = '{value}'")
     digests = []
     for task in scan.plan_files():
-        path = local_path(task.file.file_path)
+        uri = task.file.file_path
+        if lake.is_remote(settings):
+            with lake.filesystem(settings).open(uri, "rb") as handle:
+                digests.append(hashlib.sha256(handle.read()).hexdigest())
+            continue
+        path = local_path(uri)
         if path is not None and path.exists():
             digests.append(hashlib.sha256(path.read_bytes()).hexdigest())
     return sorted(digests)

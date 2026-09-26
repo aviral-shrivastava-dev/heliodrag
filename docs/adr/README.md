@@ -38,3 +38,4 @@ consequences is not finished.
 | [0007](0007-publish-schema-and-aggregates-never-element-data.md) | Publish the schema and aggregates, never element-level data | accepted |
 | [0008](0008-rate-limit-shared-across-processes-and-resumable-fetch.md) | The rate limit is shared across processes, and the element fetch resumes | accepted |
 | [0009](0009-bounded-memory-warehouse-build.md) | The warehouse build runs in bounded memory | accepted |
+| [0010](0010-one-lake-module-for-every-storage-backend.md) | One lake module, so every tool reaches S3 storage the same way | accepted |

@@ -18,6 +18,7 @@ import dagster as dg
 import duckdb
 from dagster import AssetCheckExecutionContext
 
+from starlink_drag import lake
 from starlink_drag.defs.resources import AtlasSettings
 from starlink_drag.defs.transform.assets import warehouse_asset_key
 
@@ -34,10 +35,16 @@ MAXIMUM_NULL_RATE = 0.05
 
 
 def _query(settings: AtlasSettings, sql: str) -> Any:
-    database = Path(settings.load().duckdb_path)
+    resolved = settings.load()
+    database = Path(resolved.duckdb_path)
     if not database.exists():
         return None
     with duckdb.connect(str(database), read_only=True) as con:
+        # The bronze views hold s3:// paths when the lake is remote; reading
+        # them needs the lake's keys in this connection too.
+        secret = lake.duckdb_secret(resolved)
+        if secret:
+            con.execute(secret)
         return con.execute(sql).fetchone()
 
 

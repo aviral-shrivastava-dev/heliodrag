@@ -11,6 +11,7 @@ import dagster as dg
 from dagster import AssetExecutionContext
 from dagster_dbt import DagsterDbtTranslator, DbtCliResource, dbt_assets
 
+from starlink_drag import lake
 from starlink_drag.defs.resources import AtlasSettings, dbt_project
 from starlink_drag.defs.transform.assets import warehouse_asset_key
 
@@ -57,5 +58,9 @@ def dbt_models(
     # where the Makefile runs it from the repository root. A relative warehouse
     # path therefore resolves to two different files depending on who invoked
     # it, so it is made absolute here -- the one place that knows both.
-    os.environ["DUCKDB_PATH"] = str(settings.load().duckdb_path.resolve())
+    resolved = settings.load()
+    os.environ["DUCKDB_PATH"] = str(resolved.duckdb_path.resolve())
+    # dbt reads the lake's address and keys from real environment variables,
+    # not from .env, so they are handed over explicitly (see profiles.yml).
+    os.environ.update(lake.dbt_environment(resolved))
     yield from dbt.cli(["build"], context=context).stream()

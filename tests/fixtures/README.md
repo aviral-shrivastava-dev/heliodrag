@@ -14,6 +14,7 @@ what the server returned.
 | `omni_2024-05-10.csv` | Real hourly data, 10–11 May 2024 | The Gannon storm: Dst reaches −406 nT and Kp saturates at 9.0. Real extreme values, so the schema bounds are tested against the worst case that actually happened rather than an imagined one. |
 | `omni_1963-01-01_with_fills.csv` | Real data containing fill markers | F10.7 is 999.9 throughout, meaning "not measured". Proves fills become `None` instead of entering the science as a solar flux of 999.9. |
 | `omni_error_1411.json` | A real error body | HAPI reports failures with **HTTP 200** and a body that is neither valid CSV nor valid JSON. Captured by deliberately requesting parameters out of order. |
+| `omni_no_data_1201.csv` | A real "no data" body, 24 Sep 2026 | Status 1201, *OK - no data for time range*: what HAPI answers for any day inside OMNI's publication lag of about a week. A success with nothing in it, not an error. Captured from the live server on 2026-09-26. |
 
 Regenerate by requesting the same URLs from `https://cdaweb.gsfc.nasa.gov/hapi`.
 

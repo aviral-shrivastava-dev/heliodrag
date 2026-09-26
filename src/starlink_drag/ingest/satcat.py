@@ -8,18 +8,16 @@ comparing two runs is how a decay is detected.
 from __future__ import annotations
 
 import datetime as dt
-from pathlib import Path
 
 import polars as pl
 
 from starlink_drag.clients.spacetrack import SpaceTrackClient
 from starlink_drag.config import Settings
 from starlink_drag.ingest.bronze import (
-    DATASET,
     SATCAT_SPEC,
     LoadOutcome,
-    lake_root,
     land,
+    read_table,
 )
 from starlink_drag.schemas import satcat
 
@@ -58,13 +56,14 @@ def norad_ids(
     window or had already decayed before its start. Fetching elements for a
     satellite that did not exist yet wastes a request against a hard rate limit.
     """
-    table = Path(lake_root(settings)) / DATASET / satcat_table_name() / "data"
-    if not table.exists():
+    # Through the table's current snapshot, never a directory listing, which
+    # would work only for a local lake and would include superseded files.
+    frame = read_table(settings, satcat_table_name())
+    if frame.is_empty():
         raise FileNotFoundError(
-            f"no SATCAT snapshot in bronze at {table}. Run `starlink-drag ingest satcat` first."
+            "no SATCAT snapshot in bronze. Run `starlink-drag ingest satcat` first."
         )
 
-    frame = pl.read_parquet(sorted(table.glob("**/*.parquet")))
     latest = frame["ingest_date"].max()
     frame = frame.filter(pl.col("ingest_date") == latest)
 

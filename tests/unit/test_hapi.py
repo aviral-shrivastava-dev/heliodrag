@@ -121,6 +121,14 @@ def test_an_error_body_served_with_http_200_is_detected() -> None:
             client.omni(dt.date(2024, 5, 10), dt.date(2024, 5, 11))
 
 
+def test_a_range_with_no_data_yet_is_empty_not_an_error() -> None:
+    """NASA publishes OMNI about a week behind, and answers a request for a
+    recent day with status 1201, "OK - no data for time range". Captured from
+    the live server for 2026-09-24. Raising on it failed every daily run."""
+    with _serving("omni_no_data_1201.csv") as client:
+        assert client.omni(dt.date(2026, 9, 24), dt.date(2026, 9, 25)) == []
+
+
 def test_a_non_200_from_info_is_raised() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503)

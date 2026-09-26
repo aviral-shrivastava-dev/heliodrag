@@ -27,6 +27,19 @@ starlink_drag:
         # honest limit makes DuckDB spill to data/atlas.duckdb.tmp instead --
         # for what can spill; see int_gp__deduplicated for what could not.
         memory_limit: "{{ env_var('DUCKDB_MEMORY_LIMIT', '4GB') }}"
+      secrets:
+        # How DuckDB reaches an S3-compatible lake (LAKE_BACKEND=r2): MinIO in
+        # infra/docker, or Cloudflare R2. The bronze views store s3:// paths,
+        # not keys, so every connection needs this. starlink_drag.lake builds
+        # these variables from the settings and passes them to dbt; with a
+        # local lake the secret exists and is simply never used.
+        - type: s3
+          key_id: "{{ env_var('LAKE_ACCESS_KEY_ID', '') }}"
+          secret: "{{ env_var('LAKE_SECRET_ACCESS_KEY', '') }}"
+          endpoint: "{{ env_var('LAKE_S3_ENDPOINT', 's3.amazonaws.com') }}"
+          region: "{{ env_var('LAKE_REGION', 'auto') }}"
+          use_ssl: "{{ env_var('LAKE_S3_USE_SSL', 'true') }}"
+          url_style: path
 
     ci:
       # Ephemeral database seeded from tests/fixtures; never the real warehouse.

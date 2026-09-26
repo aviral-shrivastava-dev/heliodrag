@@ -257,6 +257,15 @@ up, but no scheduled tick was observed, and its log showed a code-server
 warning (`No heartbeat received in 20 seconds, shutting down`) that has not been
 investigated.
 
+*Update, 2026-09-26:* the stack was in worse shape than this section says. The
+image had no dbt manifest, so the project never loaded in either container --
+most likely the cause of that warning -- and the pipeline could not write to
+MinIO at all. Both are fixed
+([ADR-0010](../adr/0010-one-lake-module-for-every-storage-backend.md)): the
+project loads, a two-day backfill runs inside the stack against MinIO, and every
+Dagster daemon, the scheduler included, reports healthy. A scheduled tick has
+still not been watched fire.
+
 ## A bug found while re-running the backfill
 
 The first full backfill failed immediately with

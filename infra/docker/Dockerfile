@@ -32,6 +32,18 @@ RUN mkdir -p "$DAGSTER_HOME" && printf 'telemetry:\n  enabled: false\n' > "$DAGS
 
 ENV PATH="/opt/atlas/.venv/bin:$PATH"
 
+# Dagster reads transform/target/manifest.json when it loads the project, and
+# neither it nor the dbt packages are committed (.dockerignore keeps any local
+# copy out). Without this the webserver still answers on port 3000 -- the UI
+# loads and shows the project failing to load inside it, which is how an
+# earlier check mistook a broken stack for a working one.
+RUN dbt deps --project-dir transform --profiles-dir transform \
+ && dbt parse --project-dir transform --profiles-dir transform
+
+# DuckDB fetches its S3 extension on first use; installing it into the image
+# means a container never needs the internet to read the lake.
+RUN python -c "import duckdb; duckdb.connect().install_extension('httpfs')"
+
 EXPOSE 3000
 
 CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-m", "starlink_drag.definitions"]

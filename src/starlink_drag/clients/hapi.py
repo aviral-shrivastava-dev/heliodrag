@@ -128,7 +128,8 @@ class HapiClient:
             raise HapiError(f"HAPI /data returned {response.status_code}")
 
         text = response.text
-        _raise_for_csv_error(text)
+        if _raise_for_csv_error(text) == HAPI_NO_DATA:
+            return []
         return _parse_csv(text, ordered, fills)
 
 
@@ -181,7 +182,15 @@ _STATUS_RE = re.compile(
 )
 
 
-def _raise_for_csv_error(text: str) -> None:
+HAPI_OK = 1200
+HAPI_NO_DATA = 1201
+"""HAPI's "OK - no data for time range": a success with nothing in it, not an
+error. NASA publishes OMNI about a week behind real time, so every recent day
+answers with this -- and treating it as a failure made the daily run fail every
+day, until a run inside Docker on 2026-09-26 asked for yesterday."""
+
+
+def _raise_for_csv_error(text: str) -> int:
     """Detect a failure reported inside a nominally-CSV body.
 
     A failed CSV request does not return JSON. The observed shape is a stray
@@ -192,16 +201,18 @@ def _raise_for_csv_error(text: str) -> None:
         "status": {"code": 1411, "message": "HAPI error 1411: ..."}
         }
 
-    So the marker is searched for rather than the body being parsed.
+    So the marker is searched for rather than the body being parsed. Returns
+    the status code: 1200, or 1201 when the range simply holds no data.
     """
     if '"status"' not in text:
-        return
+        return HAPI_OK
     match = _STATUS_RE.search(text)
     if match is None:
         raise HapiError(f"HAPI returned an error body: {text[:200]}")
     code = int(match.group("code"))
-    if code != 1200:
+    if code not in (HAPI_OK, HAPI_NO_DATA):
         raise HapiError(f"HAPI status {code}: {match.group('message')}")
+    return code
 
 
 def _raise_for_hapi_status(payload: dict[str, Any]) -> None:

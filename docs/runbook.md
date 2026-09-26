@@ -304,6 +304,33 @@ the de-duplication, is now an aggregation.
    usual culprit; rewrite it as a `GROUP BY` where the logic allows, and check
    the rewrite returns the same rows before trusting it.
 
+## The Docker stack
+
+**A page on port 3000 is not a working stack.** The Dagster web UI loads even
+when the project inside it has failed to load, and a Phase 4 check once
+recorded exactly that as verified. Ask Dagster instead:
+
+```bash
+curl -s http://localhost:3000/graphql -H "Content-Type: application/json"   -d '{"query":"{ workspaceOrError { ... on Workspace { locationEntries { name loadStatus locationOrLoadError { __typename } } } } }"}'
+```
+
+`LOADED` with `RepositoryLocation` is healthy. `PythonError` means the project
+did not import: usually an image built without the dbt manifest -- rebuild with
+`--build`.
+
+**Ingestion fails with missing Space-Track credentials.** The containers read
+the repository root's `.env`. Check it exists and has both `SPACETRACK_*`
+lines, then `up -d --force-recreate`.
+
+**Running ingestion on the host and in Docker at once.** Each keeps its own
+request ledger, the host's under `data/` and the stack's in its `warehouse`
+volume, so neither sees the other's requests. Run ingestion in one place at a
+time.
+
+**The lake lives in the `minio-data` volume.** Browse it at
+http://localhost:9001. `docker compose ... down` keeps it; `down -v` deletes
+it, along with the stack's warehouse and run history.
+
 ## Duplicate rows after a re-run
 
 **Looks like:** `dbt build` failing a uniqueness test on a staging model.

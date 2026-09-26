@@ -23,13 +23,13 @@ from starlink_drag.ingest.bronze import (
     AUDIT_TABLE,
     OMNI_SPEC,
     QUARANTINE_TABLE,
-    lake_root,
     land,
     make_pipeline,
     partition_digest,
     read_table,
     write,
 )
+from starlink_drag.lake import root as lake_root
 from starlink_drag.schemas import omni
 
 pytestmark = pytest.mark.integration

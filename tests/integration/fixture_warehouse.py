@@ -150,41 +150,52 @@ def _omni_rows() -> list[dict[str, Any]]:
     return rows
 
 
-def build_bronze(database: Path) -> None:
-    """A DuckDB database holding bronze tables shaped exactly like the real ones.
+def bronze_frames() -> dict[str, pl.DataFrame]:
+    """The three bronze sources, typed exactly as the production writers type them.
 
     Built through the production schema modules, so a change to the bronze
-    column set breaks this test rather than silently diverging from it.
+    column set breaks these tests rather than silently diverging from them.
     """
     satellites = _seed_satellites()
     assert satellites, "the generation seed is empty"
-
-    frames = {
+    return {
         "gp_history": gp.to_frame(_gp_rows(satellites)),
         "satcat": satcat.to_frame(_satcat_rows(satellites), dt.date(2024, 5, 20)),
         "omni": omni.to_frame(_omni_rows()),
     }
 
+
+def add_empty_bookkeeping_tables(con: duckdb.DuckDBPyConnection) -> None:
+    """Quarantine and the load log exist in the real lake and dbt declares them
+    as sources; nothing in the fixture fails validation or is audited."""
+    con.execute("create schema if not exists bronze")
+    con.execute(
+        "create table if not exists bronze.quarantine "
+        "(source varchar, ingest_date date, failure_reason varchar, payload varchar)"
+    )
+    con.execute(
+        "create table if not exists bronze.ingest_audit "
+        "(table_name varchar, source varchar, partition_from varchar, "
+        "partition_to varchar, partition_count bigint, rows_written bigint, "
+        "rows_quarantined bigint, ingest_timestamp timestamp, ingest_date date)"
+    )
+
+
+def build_bronze(database: Path) -> None:
+    """A DuckDB database holding bronze tables shaped exactly like the real ones."""
+    frames = bronze_frames()
     with duckdb.connect(str(database)) as con:
         con.execute("create schema if not exists bronze")
         for name, frame in frames.items():
             arrow = frame.to_arrow()  # noqa: F841 - referenced by the query below
             con.execute(f"create table bronze.{name} as select * from arrow")
-        # These two exist in the real lake and dbt declares them as sources.
-        con.execute(
-            "create table bronze.quarantine "
-            "(source varchar, ingest_date date, failure_reason varchar, payload varchar)"
-        )
-        con.execute(
-            "create table bronze.ingest_audit "
-            "(table_name varchar, source varchar, partition_from varchar, "
-            "partition_to varchar, partition_count bigint, rows_written bigint, "
-            "rows_quarantined bigint, ingest_timestamp timestamp, ingest_date date)"
-        )
+        add_empty_bookkeeping_tables(con)
 
 
-def run_dbt(database: Path, work_dir: Path, *extra: str) -> subprocess.CompletedProcess[str]:
-    environment = dict(os.environ, DUCKDB_PATH=str(database))
+def run_dbt(
+    database: Path, work_dir: Path, *extra: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    environment = dict(os.environ, DUCKDB_PATH=str(database), **(env or {}))
     return subprocess.run(
         [
             sys.executable,
